@@ -52,12 +52,12 @@ ver_path = convert_path('numerics/version.py')
 with open(ver_path) as ver_file:
     exec(ver_file.read(), main_ns)
 
-setup(name="mptcpanalyzer",
+setup(name="scheduler",
 # TODO import version.py
       version=main_ns['__version__'],
-      description="Analyze mptcp traces (.pcap)",
+      description="Mini MPTCP simulator",
       long_description=open('README.md').read(),
-      url="http://github.com/lip6-mptcp/mptcpanalyzer",
+      url="http://github.com/teto/scheduler",
       license="GPL",
       author="Matthieu Coudron",
       classifiers=[
@@ -89,18 +89,10 @@ setup(name="mptcpanalyzer",
             # creates 2 system programs that can be called from PATH
             # 'mptcpanalyzer = mptcpanalyzer.cli:cli',
             # 'mptcpexporter = mptcpanalyzer.exporter:main',
-            'mpnum = numerics.analysis:run'
+            'mpnumerics = numerics.analysis:run'
           ],
         # Each item in the list should be a string with name = module:importable where name is the user-visible name for the plugin, module is the Python import reference for the module, and importable is the name of something that can be imported from inside the module.
-          # 'mptcpanalyzer.plots': [
-          #     'misc = mptcpanalyzer.plots.dsn:PerSubflowTimeVsX',
-          #     # 'interdeparture = mptcpanalyzer.plots.dsn:DsnInterArrivalTimes',
-          #     'interarrival = mptcpanalyzer.plots.dsn:InterArrivalTimes',
-          #     'xinterarrival = mptcpanalyzer.plots.dsn:CrossSubflowInterArrival',
-          #     'latency = mptcpanalyzer.plots.latency:LatencyHistogram',
-          #     'dss_len = mptcpanalyzer.plots.dsn:DssLengthHistogram',
-          #     'dss = mptcpanalyzer.plots.dsn:DSSOverTime',
-          #     'owd = mptcpanalyzer.plots.owd:OneWayDelay',
+          # 'numerics.mods': [
           #     'ns3 = mptcpanalyzer.plots.ns3:PlotTraceSources',
           #     ],
           # # namespace for plugins that monkey patch the main Cmd class
@@ -116,7 +108,6 @@ setup(name="mptcpanalyzer",
             # those dependancies might made optional later or the package split into two
           'sympy', #for symbolic computing
           'sortedcontainers' # for the mini mptcp simulator events list
-
           ],
       # for now the core is not modular enough so just check that running the process produces the same files
       # test_suite="tests",

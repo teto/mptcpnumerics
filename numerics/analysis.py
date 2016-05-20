@@ -14,8 +14,9 @@ import cmd
 import sys
 import logging
 import collections
+import sortedcontainers
 
-log = logging.getLogger("mptcpanalyzer")
+log = logging.getLogger("mptcpnumerics")
 log.setLevel(logging.DEBUG)
 log.addHandler(logging.StreamHandler())
 
@@ -157,29 +158,34 @@ class HOLTypes(Enum):
 
 class Event:
     """
-    Describe an event in simulator
+    Describe an event in simulator. 
+    As it is 
     """
 
-    time = None
-    subflow_id = None
-    def __init__(self):
-        pass
+    def __init__(self, **args):
+        """
+        special a list of optional features listed in EventFeature
+        """
+        self.time = None
+        self.subflow_id = None
 
+        self.special = []
     # def __str__(self):
 
 
 class SenderEvent(Event):
-    dsn = None
     def __init__(self):
         self.direction = Direction.Receiver
+        self.dsn = None
 
 class ReceiverEvent(Event):
 
-    dack = None
-    rcv_wnd = None
-    blocks = []
     def __init__(self):
         self.direction = Direction.Sender
+
+        self.dack = None
+        self.rcv_wnd = None
+        self.blocks = []
 
 class MpTcpSubflow:
     # may change
@@ -461,6 +467,73 @@ class MpTcpReceiver:
         # print(packets)
         return packets
 
+class Simulator:
+    """
+
+    """
+        # should be ordered according to time
+        # events = []
+    def __init__(self, sender : MpTcpSender, receiver : MpTcpReceiver):
+        """
+        current_time is set to the time of the current event
+        """
+        self.sender = sender
+        self.receiver = receiver
+        
+        # http://www.grantjenks.com/docs/sortedcontainers/sortedlistwithkey.html#id1
+        self.events = sortedcontainers.SortedListWithKey(key=lambda x: x.time)
+        self.stop = None
+        self.current_time = 0
+
+
+    def add(self, p):
+        """
+        Insert an event
+        """
+        assert p.time >= self.current_time
+        events.add(p)
+
+    def run(self):
+        """
+        Starts running the simulation
+        """
+        duration = self.stop_time
+
+        for e in self.events:
+
+            if e.time > duration:
+                print("Duration of simulation finished ! Break out of the loop")
+                break
+
+            current_time = e.time
+            log.debug("Current time=%d" % current_time)
+            # events emitted by host
+            pkts = []
+            if e.direction == Direction.Receiver:
+                pkts = self.receiver.recv(e)
+            elif e.direction == Direction.Sender:
+                pkts = self.sender.recv(e)
+            else:
+                raise Exception("wrong direction")
+            
+            print(pkts)
+            if pkts:
+                for p in pkts:
+                    log.debug("Adding event %s"%p)
+                    self.add(p)
+            else:
+                log.debug("No pkt present")
+
+        constraints = []
+        return constraints
+
+    def stop(self, stop_time):
+        """
+        """
+        log.info("Setting stop_time to %d" % stop_time)
+        self.stop_time = stop_time
+
+
 
 
 class MpTcpNumerics(cmd.Cmd):
@@ -479,7 +552,7 @@ class MpTcpNumerics(cmd.Cmd):
         with open(filename) as f:
             self.j = json.load(f)
             # self.sender = 
-            # self.subflows = 
+            # self.subflows = map( lambda x: MpTcpSubflow(), self.j["subflows"])
             print("toto")
 
     def do_print(self, args):
@@ -525,6 +598,42 @@ class MpTcpNumerics(cmd.Cmd):
         duration = self._compute_cycle()
         self._compute_constraints(duration)
 
+    def do_compute_rto_constraints(self, args):
+        for subflow in self.j:
+            self.per_subflow_rto_constraints(subflow)
+
+    def do_subflow_rto_constraints(self, args):
+        # use args as the name of the subflow ids
+        self.per_subflow_rto_constraints()
+
+    def per_subflow_rto_constraints(self, fainting_subflow):
+        """
+        fainting_subflow : subflow which is gonna lose its packets
+        """
+        receiver = MpTcpReceiver(capabilities, self.j)
+        sender = MpTcpSender(self.j,) 
+
+        sim = Simulator(sender, receiver)
+
+        # we start sending a full window over each path
+        # sort them depending on fowd
+        subflows = sorted(self.j["subflows"] , key=lambda x: x["fowd"] , reverse=True)
+
+        log.info("Initial send")
+        while sender.available_window():
+            for sf in subflows:
+                
+                pkt = sender.generate_pkt(sf["id"])
+                if sf["id"] == fainting_subflow:
+                    log.debug("Mimicking an RTO => Needs to drop this pkt")
+                    sim.stop ( fainting_subflow.rto() )
+                    continue
+                
+                sim.add(pkt)
+
+        return sim.run()
+
+
     def _compute_constraints(self, duration):
         """
         Options and buffer size are loaded from topologies
@@ -532,6 +641,7 @@ class MpTcpNumerics(cmd.Cmd):
 
         Create an alternative scenario where one flow has an rto
 
+        Return a list of constraints/stats
         """
 
         print("Cycle duration ", duration)
@@ -541,27 +651,18 @@ class MpTcpNumerics(cmd.Cmd):
 
         capabilities = self.j["capabilities"]
 
-
         # creation of the two hosts
         receiver = MpTcpReceiver(capabilities, self.j)
         sender = MpTcpSender(self.j,) 
 
-        # ds
-        # events = time + direction
-        # depending on direction, size may
-        # http://www.grantjenks.com/docs/sortedcontainers/sortedlistwithkey.html#id1
-        import sortedcontainers
-        events = sortedcontainers.SortedListWithKey(key=lambda x: x.time)
-        # should be ordered according to time
-        # events = []
-        # nb_of_subflows = len(self.j["subflows"])
+        sim = Simulator(sender, receiver)
 
         # we start sending a full window over each path
             # sort them depending on fowd
         subflows = sorted(self.j["subflows"] , key=lambda x: x["fowd"] , reverse=True)
 
-        global current_time
-        current_time = 0
+        # global current_time
+        # current_time = 0
 
         log.info("Initial send")
         while sender.available_window():
@@ -572,33 +673,16 @@ class MpTcpNumerics(cmd.Cmd):
                 events.add(pkt)
 
 
-        for e in events:
-            if e.time > duration:
-                print("Duration of simulation finished ! Break out of the loop")
-                break
-            current_time = e.time
-            log.debug("Current time=%d" % current_time)
-            # events emitted by host
-            pkts = []
-            if e.direction == Direction.Receiver:
-                pkts = receiver.recv(e)
-            elif e.direction == Direction.Sender:
-                pkts = sender.recv(e)
-            else:
-                raise Exception("wrong direction")
-            
-            print(pkts)
-            if pkts:
-                for p in pkts:
-                    log.debug("Adding event %s"%p)
-                    events.add(p)
-            else:
-                log.debug("No pkt present")
 
 
         print("loop finished")
         return
 
+    def do_export_constraints_to_cplex():
+        """
+        Once constraints are computed, one can 
+        """
+        pass
 
     def do_q(self, args):
         """
@@ -726,6 +810,7 @@ def run():
     parser = argparse.ArgumentParser(
         description='Generate MPTCP stats & plots'
     )
+
     #  todo make it optional
     parser.add_argument("input_file", action="store",
             help="Either a pcap or a csv file (in good format)."
