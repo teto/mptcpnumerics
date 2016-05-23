@@ -2,6 +2,8 @@
 # attempt to do some monkey patching
 # sympify can generate symbols from string
 # http://docs.sympy.org/dev/modules/core.html?highlight=subs#sympy.core.basic.Basic.subs
+# launch it with 
+# $ mptcpnumerics topology.json compute_rto_constraints
 from mptcpanalyzer.command import Command
 
 from enum import Enum, IntEnum
@@ -29,7 +31,7 @@ log.addHandler(logging.StreamHandler())
 
 # TODO 
 
-
+current_time = 0
 
 
 class MpTcpCapabilities(Enum):
@@ -258,6 +260,8 @@ class MpTcpSender:
     # TODO maintain statistics about the events and categorize them by HOLTypes
     def __init__(self, config):
         """
+        self.rcv_wnd is a 
+        self.subflows is a dict( subflow_name, MpTcpSubflow)
         """
         self.snd_buf_max = config["sender"]["snd_buffer"]
         # self.left = 0
@@ -491,6 +495,7 @@ class Simulator:
         Insert an event
         """
         assert p.time >= self.current_time
+        log.info("Adding pkt %r " % p)
         events.add(p)
 
     def run(self):
@@ -619,14 +624,18 @@ class MpTcpNumerics(cmd.Cmd):
 
         # we start sending a full window over each path
         # sort them depending on fowd
-        subflows = sorted(self.j["subflows"] , key=lambda x: x["fowd"] , reverse=True)
+        # subflows = sorted(self.j["subflows"] , key=lambda x: x["fowd"] , reverse=True)
 
         log.info("Initial send")
+        subflows = sender.subflows.values()
+        subflows = sorted(subflows, key=lambda x: x.fowd, reverse=True)
+
         while sender.available_window():
+            
             for sf in subflows:
                 
-                pkt = sender.generate_pkt(sf["id"])
-                if sf["id"] == fainting_subflow:
+                pkt = sf.generate_pkt(sender.snd_next)
+                if sf == fainting_subflow:
                     log.debug("Mimicking an RTO => Needs to drop this pkt")
                     sim.stop ( fainting_subflow.rto() )
                     continue
@@ -671,7 +680,7 @@ class MpTcpNumerics(cmd.Cmd):
             for sf in subflows:
             # TODO check how to insert in 
                 
-                pkt = sender.generate_pkt(sf["id"])
+                pkt = sf.generate_pkt(sender.snd_next)
                 events.add(pkt)
 
 
