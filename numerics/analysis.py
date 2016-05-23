@@ -197,7 +197,7 @@ class MpTcpSubflow:
         self.bowd = bowd
         self.cwnd = sp.IndexedBase("cwnd")
         self.una = 0
-        self.busy = False
+        self.outstanding = False
         self.svar = 10
         self.mss = mss
         self.fowd = fowd
@@ -227,13 +227,13 @@ class MpTcpSubflow:
     def ack_window(self):
         self.una += self.cwnd
         self.increase_window()
-        self.busy = False
+        self.outstanding = False
 
 
     def generate_pkt(self, dsn, ):
         """
         """
-        assert self.busy == False
+        assert self.outstanding == False
 
         e = SenderEvent()
         e.time = current_time + self.fowd
@@ -243,7 +243,7 @@ class MpTcpSubflow:
 
         # a
         self.una = dsn
-        self.busy = True
+        self.outstanding = True
         return e
 
 
@@ -270,22 +270,23 @@ class MpTcpSender:
         
         self.subflows = {}
         for sf in config["subflows"]:
-            # print("test", sf)
+            print("test", sf)
             self.subflows.update( {sf["name"]: MpTcpSubflow( **sf)} )
         # sort them by subflow
         # sp.Symbol()
+        print(self.subflows)
     
 
     def outstanding(self):
         outstanding = 0
-        for sf in self.subflows:
-            if sf.busy == True:
+        for sf_id, sf in self.subflows.items():
+            if sf.outstanding == True:
                 outstanding += sf.cwnd
         return outstanding
 
     def available_window(self):
         min(self.snd_buf_max, self.rcv_wnd)
-        return self.rcv_wnd - outstanding
+        return self.rcv_wnd - self.outstanding()
 
     # def generate_pkt(self, sf_id):
     #     """
@@ -364,7 +365,7 @@ class MpTcpReceiver:
         self.out_of_order = []
         for sf in config["subflows"]:
             self.subflows.update( {sf["name"]: sf})
-            self.subflows.update( {sf["id"]: sf})
+            # self.subflows.update( {sf["id"]: sf})
 
     def outstanding(self):
         raise Exception("TODO")
@@ -433,7 +434,6 @@ class MpTcpReceiver:
         
         headSeq = p.dsn
         tailSeq = p.dsn + p.size
-
 
         if tailSeq > self.right_edge():
             tailSeq = self.right_edge()    
@@ -610,6 +610,8 @@ class MpTcpNumerics(cmd.Cmd):
         """
         fainting_subflow : subflow which is gonna lose its packets
         """
+        # TODO should be 
+        capabilities = self.j["capabilities"]
         receiver = MpTcpReceiver(capabilities, self.j)
         sender = MpTcpSender(self.j,) 
 
