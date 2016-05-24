@@ -13,6 +13,7 @@
 	"subflows": [
 		{
 			"name": "sffb",
+			"cwnd": 0.8,
 			"mss": 1500,
 			"var": 10,
 			"fowd": 50,
@@ -21,6 +22,7 @@
 		},
 		{
 			"name": "ffsb",
+			"cwnd": 0.1,
 			"mss": 1500,
 			"var": 10,
 			"fowd": 10,

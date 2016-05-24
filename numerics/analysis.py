@@ -4,19 +4,19 @@
 # http://docs.sympy.org/dev/modules/core.html?highlight=subs#sympy.core.basic.Basic.subs
 # launch it with 
 # $ mptcpnumerics topology.json compute_rto_constraints
-from mptcpanalyzer.command import Command
+# from mptcpanalyzer.command import Command
 
 from enum import Enum, IntEnum
 import sympy as sp
 import argparse
-import shlex
 import json
-import sympy as sy
+# import sympy as sy
 import cmd
 import sys
 import logging
-import collections
+# import collections
 import sortedcontainers
+import pulp as pu
 
 log = logging.getLogger("mptcpnumerics")
 log.setLevel(logging.DEBUG)
@@ -33,6 +33,9 @@ log.addHandler(logging.StreamHandler())
 
 current_time = 0
 
+
+def rto(rtt, svar):
+    return rtt + 4* svar
 
 class MpTcpCapabilities(Enum):
     """
@@ -172,7 +175,11 @@ class Event:
         self.subflow_id = None
 
         self.special = []
-    # def __str__(self):
+
+    def __str__(self):
+        return "Scheduled at {s.time} ".format(
+                s=self
+                )
 
 
 class SenderEvent(Event):
@@ -194,24 +201,50 @@ class MpTcpSubflow:
     # should be sympy symbols ?
 
     # fixed values
-    def __init__(self, name, mss, fowd, bowd, loss, var, **extra):
-        self.fowd = fowd
-        self.bowd = bowd
-        self.cwnd = sp.IndexedBase("cwnd")
-        self.una = 0
-        self.outstanding = False
+    def __init__(self, upper_bound,  name,  mss, fowd, bowd, loss, var, cwnd=None, **extra):
+        """
+        """
+        # self.sender = sender
+            # loaded_cwnd = sf_dict.get("cwnd", self.rcv_wnd)
+        upper_bound = min( upper_bound, cwnd ) if cwnd else upper_bound
+        cwnd = pu.LpVariable (name, 0, upper_bound)
+
+        self.name = name
+
+        self.cwnd = cwnd
+
+        # self.una = 0
+        # TODO rename to 'inflight'
+        self.inflight = False
+        # unused for now
         self.svar = 10
         self.mss = mss
+
+        # forward and Backward one way delays
         self.fowd = fowd
         self.bowd = bowd
         self.loss_rate = loss
-        self.name = name
 
         print("TODO")
         print(extra)
 
+    # def __repr__(self):
+    def __str__(self):
+        """
+        """
+        return "Id={s.name} Rtt={s.fowd}+{s.bowd} inflight={s.outstanding}".format(
+                s=self
+                )
+
+    def busy(self):
+        """
+        returns true if a window of packet is in flight
+        """
+        return self.inflight
+
+
     def rto(self):
-        return self.rtt + 4* self.svar
+        return rto (self.rtt, self.svar)
 
     def rtt(self):
         return self.fowd + self.bowd
@@ -229,23 +262,23 @@ class MpTcpSubflow:
     def ack_window(self):
         self.una += self.cwnd
         self.increase_window()
-        self.outstanding = False
+        self.inflight = False
 
 
     def generate_pkt(self, dsn, ):
         """
         """
-        assert self.outstanding == False
+        assert self.inflight == False
 
         e = SenderEvent()
         e.time = current_time + self.fowd
         e.subflow_id = self.name
-        e.dsn  = self.snd_next
+        e.dsn  = dsn
         e.size = self.cwnd
 
         # a
         self.una = dsn
-        self.outstanding = True
+        self.inflight = True
         return e
 
 
@@ -273,34 +306,54 @@ class MpTcpSender:
         self.rcv_wnd = config["receiver"]["rcv_buffer"]
         
         self.subflows = {}
-        for sf in config["subflows"]:
-            print("test", sf)
-            self.subflows.update( {sf["name"]: MpTcpSubflow( **sf)} )
-        # sort them by subflow
-        # sp.Symbol()
+        for sf_dict in config["subflows"]:
+            print("test", sf_dict)
+            # self.cwnd = sp.IndexedBase("cwnd_{name}")
+            upper_bound = min(self.snd_buf_max, self.rcv_wnd)
+            # cwnd has to be <= min(rcv_buf, snd_buff) TODO add
+            
+            subflow = MpTcpSubflow( upper_bound=upper_bound, **sf_dict)
+            self.subflows.update( {sf_dict["name"]: subflow} )
+            # sort them by subflow
+            # sp.Symbol()
         print(self.subflows)
-    
+        
 
-    def outstanding(self):
-        outstanding = 0
+    # rename to inflight
+    def inflight(self):
+        inflight = 0
         for sf_id, sf in self.subflows.items():
-            if sf.outstanding == True:
-                outstanding += sf.cwnd
-        return outstanding
+            if sf.inflight == True:
+                inflight += sf.cwnd
+        return inflight
 
     def available_window(self):
         min(self.snd_buf_max, self.rcv_wnd)
-        return self.rcv_wnd - self.outstanding()
+        return self.rcv_wnd - self.inflight()
 
-    # def generate_pkt(self, sf_id):
-    #     """
-    #     TODO removed in favor of MpTcpSubflow function
-    #     """
-    #     e = SenderEvent()
-    #     sf = self.subflows[sf_id]
-    #     e.time = current_time + sf["f"]
-    #     e.subflow_id = sf_id
-    #     e.dsn  = self.snd_next
+    def snd_nxt(self):
+        """
+        returns snd_next
+        """
+        # max(iterable, *[, key, default])
+        # max(arg1, arg2, *args[, key])
+        #return self.snd_next
+        return max(self.subflows, "dsn", 0)
+
+    def send(self, sf_id):
+        """
+        rely on MpTcpSubflow:generate_pkt function
+        """
+        # e = SenderEvent()
+        # sf = self.subflows[sf_id]
+        # e.time = current_time + sf["f"]
+        # e.subflow_id = sf_id
+        assert self.subflows[sf_id].busy() > 0
+
+        dsn  = self.snd_nxt()
+        pkt = self.subflows[sf_id].generate_pkt(dsn)
+        
+        return pkt
 
     #     # a
     #     self.snd_next += self.subflows[sf_id]["cwnd"]
@@ -352,7 +405,8 @@ class Direction(Enum):
     Sender = 1
 
 class MpTcpReceiver:
-
+    """
+    """
 
     def __init__(self, capabilities, config):
         """
@@ -371,7 +425,7 @@ class MpTcpReceiver:
             self.subflows.update( {sf["name"]: sf})
             # self.subflows.update( {sf["id"]: sf})
 
-    def outstanding(self):
+    def inflight(self):
         raise Exception("TODO")
         # return map(self.subflows)
         pass
@@ -382,7 +436,7 @@ class MpTcpReceiver:
             ooo += block.size
 
         return self.rcv_wnd_max - ooo 
-    #- outstanding
+    #- inflight
 
     def left_edge(self):
         return self.rcv_next
@@ -412,10 +466,11 @@ class MpTcpReceiver:
         tcp-rx-buffer.cc:Add
         """
         temp = sorted(self.out_of_order, lambda x : x[0])
+        new_list = []
         for head, tail in temp:
             if head <= self.rcv_next:
                 self.rcv_next = tailSeq
-                logger.debug ("updated ")
+                log.debug ("updated ")
             else:
                 new_list.append( (head, tail) )
 
@@ -433,7 +488,7 @@ class MpTcpReceiver:
         #     raise Exception("Error")
 
 
-        log.debug("Receiver received packet %" % p)
+        log.debug("Receiver received packet %s" % p)
         packets = []
         
         headSeq = p.dsn
@@ -486,7 +541,7 @@ class Simulator:
         
         # http://www.grantjenks.com/docs/sortedcontainers/sortedlistwithkey.html#id1
         self.events = sortedcontainers.SortedListWithKey(key=lambda x: x.time)
-        self.stop = None
+        self.time_limit = None
         self.current_time = 0
 
 
@@ -496,17 +551,16 @@ class Simulator:
         """
         assert p.time >= self.current_time
         log.info("Adding pkt %r " % p)
-        events.add(p)
+        self.events.add(p)
 
     def run(self):
         """
         Starts running the simulation
         """
-        duration = self.stop_time
 
         for e in self.events:
 
-            if e.time > duration:
+            if self.time_limit and e.time > self.time_limit:
                 print("Duration of simulation finished ! Break out of the loop")
                 break
 
@@ -536,7 +590,7 @@ class Simulator:
         """
         """
         log.info("Setting stop_time to %d" % stop_time)
-        self.stop_time = stop_time
+        self.time_lmit = stop_time
 
 
 
@@ -556,6 +610,9 @@ class MpTcpNumerics(cmd.Cmd):
     def do_load(self, filename):
         with open(filename) as f:
             self.j = json.load(f)
+            print(self.j["subflows"])
+            total = sum(map(lambda x: x["cwnd"], self.j["subflows"]))
+            print("Total of Cwnd=", total)
             # self.sender = 
             # self.subflows = map( lambda x: MpTcpSubflow(), self.j["subflows"])
             print("toto")
@@ -604,6 +661,11 @@ class MpTcpNumerics(cmd.Cmd):
         self._compute_constraints(duration)
 
     def do_compute_rto_constraints(self, args):
+        """
+        """
+        parser = argparse.ArgumentParser(description="hello world")
+        parser.add_argument('subflow', metavar="SUBFLOW ID", choices=list(map(lambda x: x["name"], self.j["subflows"])) , 
+                help="Choose for which subflow to compute RTO requirements")
         for subflow in self.j:
             self.per_subflow_rto_constraints(subflow)
 
@@ -630,17 +692,20 @@ class MpTcpNumerics(cmd.Cmd):
         subflows = sender.subflows.values()
         subflows = sorted(subflows, key=lambda x: x.fowd, reverse=True)
 
-        while sender.available_window():
+        # that can't work, since we don't know the real values
+        # while sender.available_window():
             
-            for sf in subflows:
+            # sender.send()
+        for sf in subflows:
                 
-                pkt = sf.generate_pkt(sender.snd_next)
-                if sf == fainting_subflow:
-                    log.debug("Mimicking an RTO => Needs to drop this pkt")
-                    sim.stop ( fainting_subflow.rto() )
-                    continue
-                
-                sim.add(pkt)
+            # ca genere des contraintes
+            pkt = sf.generate_pkt(sender.snd_next)
+            if sf == fainting_subflow:
+                log.debug("Mimicking an RTO => Needs to drop this pkt")
+                sim.stop ( fainting_subflow.rto() )
+                continue
+            
+            sim.add(pkt)
 
         return sim.run()
 
@@ -681,7 +746,7 @@ class MpTcpNumerics(cmd.Cmd):
             # TODO check how to insert in 
                 
                 pkt = sf.generate_pkt(sender.snd_next)
-                events.add(pkt)
+                self.events.add(pkt)
 
 
 
