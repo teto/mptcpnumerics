@@ -192,6 +192,11 @@ class ReceiverEvent(Event):
 class MpTcpSubflow:
     # may change
     # should be sympy symbols ?
+    
+    def __str__(self):
+        return "Name={s.name} RTT={s.fowd}+{s.bowd} outstanding={s.outstanding}".format(
+                s=self
+                )
 
     # fixed values
     def __init__(self, name, mss, fowd, bowd, loss, var, **extra):
@@ -207,8 +212,8 @@ class MpTcpSubflow:
         self.loss_rate = loss
         self.name = name
 
-        print("TODO")
-        print(extra)
+        # print("TODO")
+        # print(extra)
 
     def rto(self):
         return self.rtt + 4* self.svar
@@ -235,12 +240,13 @@ class MpTcpSubflow:
     def generate_pkt(self, dsn, ):
         """
         """
+        print("outs", self.outstanding )
         assert self.outstanding == False
 
         e = SenderEvent()
         e.time = current_time + self.fowd
         e.subflow_id = self.name
-        e.dsn  = self.snd_next
+        e.dsn  = dsn
         e.size = self.cwnd
 
         # a
@@ -496,17 +502,17 @@ class Simulator:
         """
         assert p.time >= self.current_time
         log.info("Adding pkt %r " % p)
-        events.add(p)
+        self.events.add(p)
 
     def run(self):
         """
         Starts running the simulation
         """
-        duration = self.stop_time
 
+        log.info("Starting simulation")
         for e in self.events:
 
-            if e.time > duration:
+            if e.time > self.stop_time:
                 print("Duration of simulation finished ! Break out of the loop")
                 break
 
@@ -604,8 +610,8 @@ class MpTcpNumerics(cmd.Cmd):
         self._compute_constraints(duration)
 
     def do_compute_rto_constraints(self, args):
-        for subflow in self.j:
-            self.per_subflow_rto_constraints(subflow)
+        # for subflow in self.j:
+            self.per_subflow_rto_constraints("ssfb")
 
     def do_subflow_rto_constraints(self, args):
         # use args as the name of the subflow ids
@@ -631,13 +637,17 @@ class MpTcpNumerics(cmd.Cmd):
         subflows = sorted(subflows, key=lambda x: x.fowd, reverse=True)
 
         while sender.available_window():
-            
+            print("sender.available_window()=", sender.available_window())
             for sf in subflows:
                 
+                print("sf before=%s" %sf)
                 pkt = sf.generate_pkt(sender.snd_next)
-                if sf == fainting_subflow:
+
+                print("sf after=%s" %sf)
+                if sf.name == fainting_subflow:
                     log.debug("Mimicking an RTO => Needs to drop this pkt")
-                    sim.stop ( fainting_subflow.rto() )
+                    pkt.special = "DropPacket"
+                    sim.stop ( sf.rto() )
                     continue
                 
                 sim.add(pkt)
