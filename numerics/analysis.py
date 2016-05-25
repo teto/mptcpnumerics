@@ -21,6 +21,7 @@ import pulp as pu
 log = logging.getLogger("mptcpnumerics")
 log.setLevel(logging.DEBUG)
 log.addHandler(logging.StreamHandler())
+log.addHandler(logging.FileHandler("log",mode="w"))
 
 
 """
@@ -214,6 +215,13 @@ class SenderEvent(Event):
     def __init__(self, sf_id ):
         super().__init__(sf_id, Direction.Receiver)
         self.dsn = None
+        self.size = None
+
+    def __str__(self):
+        res = super().__str__()
+        res += " dsn={s.dsn} size={s.size}".format(
+                s=self)
+        return res
 
 # @froze_it
 class ReceiverEvent(Event):
@@ -226,6 +234,11 @@ class ReceiverEvent(Event):
         
         # in case Sack is used
         self.blocks = []
+
+    def __str__(self):
+        res = super().__str__()
+        res += " dack={s.dack} rcv_wnd={s.rcv_wnd}".format(s=self)
+        return res
 
 
 class MpTcpSubflow:
@@ -312,14 +325,14 @@ class MpTcpSubflow:
         self.inflight = False
 
 
-    def generate_pkt(self, current_time, dsn, ):
+    def generate_pkt(self, dsn, ):
         """
         Generates a packet with a full cwnd
         """
         assert self.inflight == False
 
         e = SenderEvent(self.name)
-        e.time = current_time + self.fowd
+        e.delay = self.fowd
         # e.subflow_id = self.name
         e.dsn  = dsn
         e.size = self.cwnd
@@ -369,6 +382,11 @@ class MpTcpSender:
         print(self.subflows)
         
 
+    def __setattr__(self, name, value):
+        if name == "snd_next":
+            log.debug("UPDATE snd_next to %s", value)
+        self.__dict__[name] = value
+
     # rename to inflight
     def inflight(self):
         inflight = 0
@@ -387,8 +405,8 @@ class MpTcpSender:
         """
         # max(iterable, *[, key, default])
         # max(arg1, arg2, *args[, key])
-        #return self.snd_next
-        return max(self.subflows, "dsn", 0)
+        return self.snd_next
+        # return max(self.subflows, "dsn", 0)
 
     def send(self, sf_id):
         """
@@ -398,11 +416,11 @@ class MpTcpSender:
         # sf = self.subflows[sf_id]
         # e.time = current_time + sf["f"]
         # e.subflow_id = sf_id
-        assert self.subflows[sf_id].busy() > 0
+        assert self.subflows[sf_id].busy() == False
 
         dsn  = self.snd_nxt()
         pkt = self.subflows[sf_id].generate_pkt(dsn)
-        
+        self.snd_next += pkt.size 
         return pkt
 
     #     # a
@@ -571,14 +589,16 @@ class MpTcpReceiver:
         #     tailSeq = self.right_edge()    
         #     log.error ("packet exceeds what should be received")
         print("headSeq=%r vs %s"%( headSeq, (self.rcv_next)))
-        # with sympy, I can do sp.solve(headSeq < self.rcv_next)
-        if headSeq < self.rcv_next:
-            headSeq = self.rcv_next
+        # with sympy, I can do 
+        # if sp.solve(headSeq < self.rcv_next) is True:
+        # # if headSeq < self.rcv_next:
+        #     headSeq = self.rcv_next
 
         if headSeq > self.rcv_next:
             if headSeq > self.right_edge():
                 raise Exception("packet out of bounds")
             assert headSeq <= tailSeq
+            self.
             self.out_of_order.append ( (headSeq, tailSeq) )
         else:
             self.rcv_next = tailSeq
@@ -639,7 +659,7 @@ class Simulator:
         Starts running the simulation
         """
 
-        log.info("Starting simulation")
+        log.info("Starting simulation,  %d queued events " % len(self.events))
         for e in self.events:
 
             self.current_time = e.time
@@ -780,14 +800,14 @@ class MpTcpNumerics(cmd.Cmd):
         for sf in subflows:
                 
             # ca genere des contraintes
-            pkt = sf.generate_pkt(0, sender.snd_next)
+            # pkt = sf.generate_pkt(0, sender.snd_next)
+            pkt = sender.send(sf.name)
             if sf == fainting_subflow:
                 log.debug("Mimicking an RTO => Needs to drop this pkt")
                 sim.stop ( fainting_subflow.rto() )
                 continue
-            
             sim.add(pkt)
-
+            
         return sim.run()
 
 
