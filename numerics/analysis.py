@@ -14,7 +14,7 @@ import json
 import cmd
 import sys
 import logging
-# import collections
+from collections import namedtuple
 import sortedcontainers
 import pulp as pu
 
@@ -31,8 +31,31 @@ log.addHandler(logging.StreamHandler())
 
 # TODO 
 
-current_time = 0
 
+
+from functools import wraps
+
+def froze_it(cls):
+    cls.__frozen = False
+
+    def frozensetattr(self, key, value):
+        if self.__frozen and not hasattr(self, key):
+            print("Class {} is frozen. Cannot set {} = {}"
+                  .format(cls.__name__, key, value))
+        else:
+            object.__setattr__(self, key, value)
+
+    def init_decorator(func):
+        @wraps(func)
+        def wrapper(self, *args, **kwargs):
+            func(self, *args, **kwargs)
+            self.__frozen = True
+        return wrapper
+
+    cls.__setattr__ = frozensetattr
+    cls.__init__ = init_decorator(cls.__init__)
+
+    return cls
 
 def rto(rtt, svar):
     return rtt + 4* svar
@@ -167,51 +190,65 @@ class Event:
     As it is 
     """
 
-    def __init__(self, **args):
+    def __init__(self, sf_id, direction, **args):
         """
         special a list of optional features listed in EventFeature
+        Either set 'delay' (respective) or 'time' (absolute scheduled time)
+        direction => destination of the packet TODO rename
         """
+        self.direction = direction
         self.time = None
-        self.subflow_id = None
+        self.subflow_id = sf_id
+        self.delay = None
 
         self.special = []
 
     def __str__(self):
-        return "Scheduled at {s.time} ".format(
-                s=self
+        return "Scheduled at {s.time} dest={dest}".format(
+                s=self,
+                dest="sender" if self.direction == Direction.Sender else "Receiver",
                 )
 
 
 class SenderEvent(Event):
-    def __init__(self):
-        self.direction = Direction.Receiver
+    def __init__(self, sf_id ):
+        super().__init__(sf_id, Direction.Receiver)
         self.dsn = None
 
+# @froze_it
 class ReceiverEvent(Event):
 
-    def __init__(self):
-        self.direction = Direction.Sender
+    def __init__(self, sf_id):
+        super().__init__(sf_id, Direction.Sender)
 
         self.dack = None
         self.rcv_wnd = None
+        
+        # in case Sack is used
         self.blocks = []
+
 
 class MpTcpSubflow:
     # may change
     # should be sympy symbols ?
-
     # fixed values
     def __init__(self, upper_bound,  name,  mss, fowd, bowd, loss, var, cwnd=None, **extra):
         """
+        In this simulator, the cwnd is considered as constant, at its maximum.
+        Hence the value given here will remain
         """
         # self.sender = sender
             # loaded_cwnd = sf_dict.get("cwnd", self.rcv_wnd)
-        upper_bound = min( upper_bound, cwnd ) if cwnd else upper_bound
-        cwnd = pu.LpVariable (name, 0, upper_bound)
+        # FREE
+        # upper_bound = min( upper_bound, cwnd ) if cwnd else upper_bound
+        # cwnd = pu.LpVariable (name, 0, upper_bound)
+        # self.cwnd = cwnd
+        self.cwnd = sp.Symbol("cwnd_{%s}" % name, positive=True)
+        sp.refine(self.cwnd, sp.Q.positive(upper_bound - self.cwnd))
+
+        print("%r"% self.cwnd)
 
         self.name = name
-
-        self.cwnd = cwnd
 
         # self.una = 0
         # TODO rename to 'inflight'
@@ -225,8 +262,8 @@ class MpTcpSubflow:
         self.bowd = bowd
         self.loss_rate = loss
 
-        print("TODO")
-        print(extra)
+        # print("TODO")
+        # print(extra)
 
     # def __repr__(self):
     def __str__(self):
@@ -236,21 +273,27 @@ class MpTcpSubflow:
                 s=self
                 )
 
-    def busy(self):
+    def busy(self) -> bool:
         """
-        returns true if a window of packet is in flight
+        true if a window of packet is in flight
         """
         return self.inflight
 
 
     def rto(self):
+        """
+        Retransmit Timeout
+        """
         return rto (self.rtt, self.svar)
 
     def rtt(self):
+        """
+        Returns constant Round Trip Time
+        """
         return self.fowd + self.bowd
 
-    def right_edge(self):
-        return self.una + self.cwnd
+    # def right_edge(self):
+    #     return self.una + self.cwnd
 
     def increase_window(self):
         """
@@ -260,24 +303,31 @@ class MpTcpSubflow:
         pass 
 
     def ack_window(self):
-        self.una += self.cwnd
+        """
+
+        """
+        # self.una += self.cwnd
+        assert self.busy() == True
         self.increase_window()
         self.inflight = False
 
 
-    def generate_pkt(self, dsn, ):
+    def generate_pkt(self, current_time, dsn, ):
         """
+        Generates a packet with a full cwnd
         """
         assert self.inflight == False
 
-        e = SenderEvent()
+        e = SenderEvent(self.name)
         e.time = current_time + self.fowd
-        e.subflow_id = self.name
+        # e.subflow_id = self.name
         e.dsn  = dsn
         e.size = self.cwnd
 
+        print("%r"% e.size)
+
         # a
-        self.una = dsn
+        # self.una = dsn
         self.inflight = True
         return e
 
@@ -388,12 +438,16 @@ class MpTcpSender:
         log.debug("Sender received packet %s" % p)
 
 
-        # TODO everytime here we should record the constraints
-        for name,sf in self.subflows.items():
-            if p.dack >= sf.right_edge():
-                sf.ack_window()
+
+        print ("comparing dack (%s) with una (%s)" % (p.dack, self.snd_una))
 
         self.snd_una  = max(self.snd_una, p.dack)
+        self.subflows[p.subflow_id].ack_window()
+
+        # for name,sf in self.subflows.items():
+        #     if p.dack >= self.left_edge():
+        #         sf.ack_window()
+
         # TODO regenerate packets
 
             # now loo
@@ -404,8 +458,12 @@ class Direction(Enum):
     Receiver = 0
     Sender = 1
 
+
+OutOfOrderBlock = namedtuple('OutOfOrderBlock', "size ")
+
 class MpTcpReceiver:
     """
+    Max recv window is set from json file
     """
 
     def __init__(self, capabilities, config):
@@ -416,7 +474,8 @@ class MpTcpReceiver:
         # self.j["receiver"]["rcv_buffer"]
         # rcv_left, rcv_wnd, rcv_max_wnd = sp.symbols("dsn_{rcv} w_{rcv} w^{max}_{rcv}")
         self.subflows = {}
-        self.rcv_wnd_max = sp.Symbol("W^{receiver}_{MAX}")
+        #self.rcv_wnd_max = sp.Symbol("W^{receiver}_{MAX}")
+        self.rcv_wnd_max = config["receiver"]["rcv_buffer"]
         self.wnd = self.rcv_wnd_max
         self.rcv_next = 0
         # a list of tuples (headSeq, endSeq)
@@ -425,11 +484,16 @@ class MpTcpReceiver:
             self.subflows.update( {sf["name"]: sf})
             # self.subflows.update( {sf["id"]: sf})
 
-    def inflight(self):
-        raise Exception("TODO")
-        # return map(self.subflows)
-        pass
+    # def inflight(self):
+    #     raise Exception("TODO")
+    #     # return map(self.subflows)
+    #     pass
+    def __setattr__(self, name, value):
+        if name == "rcv_next":
+            log.debug("Changing rcv_next to %s", value)
+        self.__dict__[name] = value
 
+    # rename to advertised_window()
     def available_window(self):
         ooo = 0
         for block in self.out_of_order:
@@ -439,9 +503,15 @@ class MpTcpReceiver:
     #- inflight
 
     def left_edge(self):
+        """
+        what sequence number is expected next
+        """
         return self.rcv_next
 
     def right_edge(self):
+        """
+        Max seq number it can receive
+        """
         return self.left_edge() + self.rcv_wnd_max
 
     def in_range(self, dsn, size):
@@ -455,9 +525,11 @@ class MpTcpReceiver:
         """
         # super().gen_packet(direction=)
         log.debug("Generating ack for sf_id=%s" % sf_id)
-        e = ReceiverEvent()
-        e.time = current_time + self.subflows[sf_id]["bowd"]
-        e.ack = self.rcv_next
+        # TODO
+        # self.subflows[sf_id].ack_window()
+        e = ReceiverEvent(sf_id)
+        e.delay = self.subflows[sf_id]["bowd"]
+        e.dack = self.rcv_next
         return e
 
 
@@ -465,7 +537,8 @@ class MpTcpReceiver:
         """
         tcp-rx-buffer.cc:Add
         """
-        temp = sorted(self.out_of_order, lambda x : x[0])
+        print(self.out_of_order)
+        temp = sorted(self.out_of_order, key=lambda x : x[0])
         new_list = []
         for head, tail in temp:
             if head <= self.rcv_next:
@@ -494,10 +567,11 @@ class MpTcpReceiver:
         headSeq = p.dsn
         tailSeq = p.dsn + p.size
 
-        if tailSeq > self.right_edge():
-            tailSeq = self.right_edge()    
-            log.error ("packet exceeds what should be received")
-
+        # if tailSeq > self.right_edge():
+        #     tailSeq = self.right_edge()    
+        #     log.error ("packet exceeds what should be received")
+        print("headSeq=%r vs %s"%( headSeq, (self.rcv_next)))
+        # with sympy, I can do sp.solve(headSeq < self.rcv_next)
         if headSeq < self.rcv_next:
             headSeq = self.rcv_next
 
@@ -508,6 +582,7 @@ class MpTcpReceiver:
             self.out_of_order.append ( (headSeq, tailSeq) )
         else:
             self.rcv_next = tailSeq
+            print("Set rcv_next to ", self.rcv_next)
 
         self.update_out_of_order()
 
@@ -515,10 +590,11 @@ class MpTcpReceiver:
 
 
         if MpTcpCapabilities.DAckReplication in self.config["receiver"]["capabilities"]:
-            for sf in self.subflows:
-                self.generate_ack()
-                e.subflow = p.subflow
-                packets.append(e)
+            # for sf in self.subflows:
+            #     self.generate_ack()
+            #     e.subflow = p.subflow
+            #     packets.append(e)
+            pass
         else:
             e = self.generate_ack(p.subflow_id)
             packets.append(e)
@@ -549,23 +625,29 @@ class Simulator:
         """
         Insert an event
         """
+        if p.delay is not None:
+            p.time = self.current_time + p.delay
+
         assert p.time >= self.current_time
-        log.info("Adding pkt %r " % p)
+        log.info("Adding event %s " % p)
         self.events.add(p)
+        print(len(self.events), " total events")
+
 
     def run(self):
         """
         Starts running the simulation
         """
 
+        log.info("Starting simulation")
         for e in self.events:
 
-            if self.time_limit and e.time > self.time_limit:
+            self.current_time = e.time
+            if self.time_limit and self.current_time > self.time_limit:
                 print("Duration of simulation finished ! Break out of the loop")
                 break
 
-            current_time = e.time
-            log.debug("Current time=%d" % current_time)
+            log.debug("%d: running event %r" % (self.current_time, e))
             # events emitted by host
             pkts = []
             if e.direction == Direction.Receiver:
@@ -578,10 +660,9 @@ class Simulator:
             print(pkts)
             if pkts:
                 for p in pkts:
-                    log.debug("Adding event %s"%p)
                     self.add(p)
             else:
-                log.debug("No pkt present")
+                log.error("No pkt sent by either receiver or sender")
 
         constraints = []
         return constraints
@@ -699,7 +780,7 @@ class MpTcpNumerics(cmd.Cmd):
         for sf in subflows:
                 
             # ca genere des contraintes
-            pkt = sf.generate_pkt(sender.snd_next)
+            pkt = sf.generate_pkt(0, sender.snd_next)
             if sf == fainting_subflow:
                 log.debug("Mimicking an RTO => Needs to drop this pkt")
                 sim.stop ( fainting_subflow.rto() )
@@ -745,7 +826,7 @@ class MpTcpNumerics(cmd.Cmd):
             for sf in subflows:
             # TODO check how to insert in 
                 
-                pkt = sf.generate_pkt(sender.snd_next)
+                pkt = sf.generate_pkt(0, sender.snd_next)
                 self.events.add(pkt)
 
 
