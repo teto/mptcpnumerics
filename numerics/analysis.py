@@ -25,13 +25,15 @@ log.addHandler(logging.FileHandler("log",mode="w"))
 
 
 """
+Hypotheses made in this simulator:
+- subflows send full windows each time
+- there is no data duplication, NEVER !
+- windows are stable, they don't change because you reach the maximum size allowed
+by rcv_window
 
 
-
+TODO use a framework to trace some variables (save into a csv for instance)
 """
-
-# TODO 
-
 
 
 from functools import wraps
@@ -227,7 +229,9 @@ class SenderEvent(Event):
 class ReceiverEvent(Event):
 
     def __init__(self, sf_id):
-        super().__init__(sf_id, Direction.Sender)
+        super().__init__(sf_id, 
+#dack, rcv_wnd,
+Direction.Sender)
 
         self.dack = None
         self.rcv_wnd = None
@@ -459,8 +463,22 @@ class MpTcpSender:
 
         print ("comparing dack (%s) with una (%s)" % (p.dack, self.snd_una))
 
-        self.snd_una  = max(self.snd_una, p.dack)
-        self.subflows[p.subflow_id].ack_window()
+#   // Test for conditions that allow updating of the window
+#   // 1) segment contains new data (advancing the right edge of the receive
+#   // buffer),
+#   // 2) segment does not contain new data but the segment acks new data
+#   // (highest sequence number acked advances), or
+#   // 3) the advertised window is larger than the current send window
+#         self.snd_una= max(self.snd_una, p.dack)
+        # TODO should update 
+        if p.dack > self.snd_una:
+            self.rcv_wnd = p.rcv_wnd
+        elif p.rcv_wnd > self.rcv_wnd:
+            self.rcv_wnd = p.rcv_wnd
+        else:
+            log.warn("Not advancing rcv_wnd")
+
+        self.subflows[p.subflow_id].ack_window ()
 
         # for name,sf in self.subflows.items():
         #     if p.dack >= self.left_edge():
@@ -477,7 +495,11 @@ class Direction(Enum):
     Sender = 1
 
 
-OutOfOrderBlock = namedtuple('OutOfOrderBlock', "size ")
+OutOfOrderBlock = namedtuple('OutOfOrderBlock', ['dsn', 'size'])
+print("%r", OutOfOrderBlock)
+# b = OutOfOrderBlock(40,30)
+# print(b.dsn)
+# system.exit(1)
 
 class MpTcpReceiver:
     """
@@ -512,9 +534,10 @@ class MpTcpReceiver:
         self.__dict__[name] = value
 
     # rename to advertised_window()
-    def available_window(self):
+    def window_to_advertise(self):
         ooo = 0
         for block in self.out_of_order:
+            print("BLOCK=%r", block)
             ooo += block.size
 
         return self.rcv_wnd_max - ooo 
@@ -548,23 +571,32 @@ class MpTcpReceiver:
         e = ReceiverEvent(sf_id)
         e.delay = self.subflows[sf_id]["bowd"]
         e.dack = self.rcv_next
+        e.rcv_wnd = self.window_to_advertise()
         return e
 
 
     def update_out_of_order(self):
         """
         tcp-rx-buffer.cc:Add
+        removes packets from out of order buffer when they get in order
         """
-        print(self.out_of_order)
+        # print(self.out_of_order)
         temp = sorted(self.out_of_order, key=lambda x : x[0])
         new_list = []
-        for head, tail in temp:
-            if head <= self.rcv_next:
-                self.rcv_next = tailSeq
-                log.debug ("updated ")
+        # todo use size instead
+        for block in temp:
+            print("rcv_next={nxt} Block={block}".format(
+                nxt=self.rcv_next,
+                block=block,
+                )
+            )
+            if self.rcv_next == block.dsn:
+                self.rcv_next = block.dsn + block.size
+                # log.debug ("updated ")
             else:
-                new_list.append( (head, tail) )
+                new_list.append(block)
 
+        # swap old list with new one
         self.out_of_order = new_list
 
 
@@ -594,15 +626,17 @@ class MpTcpReceiver:
         # # if headSeq < self.rcv_next:
         #     headSeq = self.rcv_next
 
-        if headSeq > self.rcv_next:
-            if headSeq > self.right_edge():
-                raise Exception("packet out of bounds")
-            assert headSeq <= tailSeq
-            self.
-            self.out_of_order.append ( (headSeq, tailSeq) )
-        else:
-            self.rcv_next = tailSeq
-            print("Set rcv_next to ", self.rcv_next)
+        # if headSeq > self.rcv_next:
+            # if programmed correctly all packets should be within bounds
+            # if headSeq > self.right_edge():
+            #     raise Exception("packet out of bounds")
+            # assert headSeq < tailSeq
+            # self.
+        block = OutOfOrderBlock(headSeq, p.size)
+        self.out_of_order.append ( block )
+        # else:
+        #     self.rcv_next = tailSeq
+            # print("Set rcv_next to ", self.rcv_next)
 
         self.update_out_of_order()
 
@@ -624,6 +658,12 @@ class MpTcpReceiver:
 
 class Simulator:
     """
+    You should start feeding some packets/events (equivalent in this simulator)
+    with the "add" method.
+    You may also choose a time limit at which to "stop()" the simulator or alternatively wait
+    for the simulation to run out of events.
+
+    Once the scenario, is correctly setup, call "run" and let the magic happens !
 
     """
         # should be ordered according to time
@@ -640,6 +680,8 @@ class Simulator:
         self.time_limit = None
         self.current_time = 0
 
+        # list of constraints that will represent the problem when simulation ends
+        self.constraints =[]
 
     def add(self, p):
         """
