@@ -1,4 +1,4 @@
-#!/usr/bin/python3.5
+#!/usr/bin/python3
 # attempt to do some monkey patching
 # sympify can generate symbols from string
 # http://docs.sympy.org/dev/modules/core.html?highlight=subs#sympy.core.basic.Basic.subs
@@ -429,7 +429,7 @@ class MpTcpSender:
         assert self.subflows[sf_id].busy() == False
 
 
-        dsn  = self.snd_nxt()
+        dsn = self.snd_nxt()
         pkt = self.subflows[sf_id].generate_pkt(dsn)
         self.snd_next += pkt.size 
         return pkt
@@ -681,6 +681,7 @@ class Simulator:
     def __init__(self, sender : MpTcpSender, receiver : MpTcpReceiver):
         """
         current_time is set to the time of the current event
+        :param sender ok
         """
         self.sender = sender
         self.receiver = receiver
@@ -692,6 +693,7 @@ class Simulator:
 
         # list of constraints that will represent the problem when simulation ends
         self.constraints =[]
+        self.throughput 
 
     def add(self, p):
         """
@@ -724,7 +726,22 @@ class Simulator:
 
         # TODO replace sympy variables in constraints with pulp variables.
         # expr.subs() ; can be used with a dict
+        for constraint in self.constraints:
+            to_substitute = {}
+            for sym in constraint.free_symbols():
+                # ...
+                translation = already_translated.get(sym, None)
+                if translation is None:
+                    # TODO generate an LpVariable
+                    # generate depending on sym.name
+                    # ...
+                    translation = pu.LpVariable(
+                # pu.LpConstraint
+                to_substitute.update( (sym, translation) )
+
         # .atoms(Symbol)
+        # .free_symbols
+        # symbol.name
 # symbols('a0:%d'%numEquations)
 # numbered_symbols
         # http://docs.sympy.org/0.7.3/tutorial/basic_operations.html#substitution

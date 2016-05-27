@@ -48,11 +48,11 @@ class TestCommand(Command):
 # DISTUTILS_DEBUG=1 python3.5 setup.py install --user -vvv
 
 main_ns={}
-ver_path = convert_path('numerics/version.py')
+ver_path = convert_path('mptcpnumerics/version.py')
 with open(ver_path) as ver_file:
     exec(ver_file.read(), main_ns)
 
-setup(name="scheduler",
+setup(name="mptcpnumerics",
 # TODO import version.py
       version=main_ns['__version__'],
       description="Mini MPTCP simulator",
