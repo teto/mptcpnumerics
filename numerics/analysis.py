@@ -20,9 +20,12 @@ import pulp as pu
 
 log = logging.getLogger("mptcpnumerics")
 log.setLevel(logging.DEBUG)
-log.addHandler(logging.StreamHandler())
+handler = logging.StreamHandler()
+#%(asctime)s - %(name)s - %
+formatter = logging.Formatter('%(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+log.addHandler(handler)
 log.addHandler(logging.FileHandler("log",mode="w"))
-
 
 """
 Hypotheses made in this simulator:
@@ -32,7 +35,9 @@ Hypotheses made in this simulator:
 by rcv_window
 
 
-TODO use a framework to trace some variables (save into a csv for instance)
+TODO:
+-use a framework to trace some variables (save into a csv for instance)
+-support NR-sack
 """
 
 
@@ -341,7 +346,7 @@ class MpTcpSubflow:
         e.dsn  = dsn
         e.size = self.cwnd
 
-        print("%r"% e.size)
+        print("packet size %r"% e.size)
 
         # a
         # self.una = dsn
@@ -397,10 +402,11 @@ class MpTcpSender:
         for sf_id, sf in self.subflows.items():
             if sf.inflight == True:
                 inflight += sf.cwnd
+        # sum(filter(lambda x: x.cwnd if x.inflight), self.subflows)
         return inflight
 
     def available_window(self):
-        min(self.snd_buf_max, self.rcv_wnd)
+        # min(self.snd_buf_max, self.rcv_wnd)
         return self.rcv_wnd - self.inflight()
 
     def snd_nxt(self):
@@ -421,6 +427,7 @@ class MpTcpSender:
         # e.time = current_time + sf["f"]
         # e.subflow_id = sf_id
         assert self.subflows[sf_id].busy() == False
+
 
         dsn  = self.snd_nxt()
         pkt = self.subflows[sf_id].generate_pkt(dsn)
@@ -461,7 +468,7 @@ class MpTcpSender:
 
 
 
-        print ("comparing dack (%s) with una (%s)" % (p.dack, self.snd_una))
+        print ("comparing %s (dack) > %s (una) => result = %s " % (p.dack, self.snd_una, p.dack > self.snd_una ))
 
 #   // Test for conditions that allow updating of the window
 #   // 1) segment contains new data (advancing the right edge of the receive
@@ -471,6 +478,7 @@ class MpTcpSender:
 #   // 3) the advertised window is larger than the current send window
 #         self.snd_una= max(self.snd_una, p.dack)
         # TODO should update 
+        print( p.dack > self.snd_una )
         if p.dack > self.snd_una:
             self.rcv_wnd = p.rcv_wnd
         elif p.rcv_wnd > self.rcv_wnd:
@@ -478,6 +486,7 @@ class MpTcpSender:
         else:
             log.warn("Not advancing rcv_wnd")
 
+        # TODO we should not ack if in disorder ?
         self.subflows[p.subflow_id].ack_window ()
 
         # for name,sf in self.subflows.items():
@@ -496,7 +505,8 @@ class Direction(Enum):
 
 
 OutOfOrderBlock = namedtuple('OutOfOrderBlock', ['dsn', 'size'])
-print("%r", OutOfOrderBlock)
+Constraint = namedtuple('Constraint', ['time', 'size', 'wnd'])
+# print("%r", OutOfOrderBlock)
 # b = OutOfOrderBlock(40,30)
 # print(b.dsn)
 # system.exit(1)
@@ -692,9 +702,62 @@ class Simulator:
 
         assert p.time >= self.current_time
         log.info("Adding event %s " % p)
+
+        # VERY IMPORTANT
+        if p.direction == Receiver:
+
+            # todo sauvegarder le temps, dsn, size necessaire
+            # self.constraints.append()
         self.events.add(p)
         print(len(self.events), " total events")
 
+    def solve_constraints(self, backend="pulp"):
+        """
+        Converts from sympy to pulp
+        https://github.com/uqfoundation/mystic
+        http://www.pyomo.org/
+        https://github.com/coin-or/pulp
+        """
+
+        #create a binary variable to state that a table setting is used
+        pb = pulp.LpProblem("Subflow congestion windows repartition", pu.LpMinimize)
+
+        # TODO replace sympy variables in constraints with pulp variables.
+        # expr.subs() ; can be used with a dict
+        # .atoms(Symbol)
+# symbols('a0:%d'%numEquations)
+# numbered_symbols
+        # http://docs.sympy.org/0.7.3/tutorial/basic_operations.html#substitution
+        pu.LpVariable.dicts('table', 
+                                possible_tables, 
+                                lowBound = 0,
+                                upBound = 1,
+                                cat = pu.LpInteger)
+        
+        # TODO il faut ajouter la fct objectif
+        pb += 
+        
+        
+        
+        # https://pythonhosted.org/PuLP/pulp.html
+        # The problem data is written to an .lp file
+        pb.writeLP("constraints.lp")
+
+
+
+        pb.solve()
+        # The status of the solution is printed to the screen
+        print("Status:", LpStatus[prob.status])
+        # Each of the variables is printed with it's resolved optimum value
+        for v in prob.variables():
+            print(v.name, "=", v.varValue)
+        # The optimised objective function value is printed to the screen
+        print("Total Cost of Ingredients per can = ", value(prob.objective))
+
+
+    def add_constraint(self, size, rcv_wnd):
+        c = Constraint(self.current_time, size, rcv_wnd)
+        self.constraints.append(c)
 
     def run(self):
         """
@@ -716,6 +779,7 @@ class Simulator:
                 pkts = self.receiver.recv(e)
             elif e.direction == Direction.Sender:
                 pkts = self.sender.recv(e)
+                map(lambda x: self.add_constraint(x.size, self.sender.available_window()), pkts)
             else:
                 raise Exception("wrong direction")
             
@@ -726,7 +790,8 @@ class Simulator:
             else:
                 log.error("No pkt sent by either receiver or sender")
 
-        constraints = []
+        # constraints = []
+        self.sender.constraints()
         return constraints
 
     def stop(self, stop_time):
@@ -838,7 +903,6 @@ class MpTcpNumerics(cmd.Cmd):
         # that can't work, since we don't know the real values
         # while sender.available_window():
             
-            # sender.send()
         for sf in subflows:
                 
             # ca genere des contraintes
