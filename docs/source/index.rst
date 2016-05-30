@@ -11,7 +11,21 @@ Contents:
 .. toctree::
    :maxdepth: 2
 
-.. automodule:: mptcpnumerics
+.. automodule:: mptcpnumerics.analysis
+
+
+Sender 
+-------
+
+.. autoclass:: MpTcpSender
+    :members:
+
+.. autoclass:: MpTcpReceiver
+    :members:
+
+
+.. autoclass:: Simulator
+    :members:
 
 Indices and tables
 ==================
