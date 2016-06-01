@@ -131,6 +131,12 @@ def froze_it(cls):
 def rto(rtt, svar):
     return rtt + 4* svar
 
+
+class SolvingMode(Enum):
+    RcvBuffer = "buffer"
+    OneWindow = "single_cwnd"
+    Cwnds = "cwnds"
+
 class MpTcpCapabilities(Enum):
     """
     string value should be the one found in json's "capabilities" section
@@ -807,11 +813,68 @@ class Simulator:
         print(len(self.events), " total events")
 
 
-    def _solve_pb(self, pb, output, backend="pulp"):
+    # solve_constraints
+    def _solve_pb(self, 
+#pb, 
+            mode : SolvingMode, 
+            # translation_dict,
+            output, 
+        backend="pulp"):
         """
         factorize some code
         """
+        pb = None
+        tab = {SymbolNames.ReceiverWindow.value: None,}
 
+        # translate_subflow_symbol = None
+        translate_subflow_cwnd = None
+        if mode == SolvingMode.RcvBuffer:
+            pb = pu.LpProblem("Finding minimum required buffer size", pu.LpMinimize)
+            lp_rcv_wnd = pu.LpVariable(SymbolNames.ReceiverWindow.value, lowBound=0, cat=pu.LpInteger )
+            pb += lp_rcv_wnd, "Maximum receive window"
+            tab[SymbolNames.ReceiverWindow.value] = lp_rcv_wnd
+            translate_subflow_cwnd = def test(sf):
+                assert isinstance(sf.cwnd_from_file, int)
+                return sf.cwnd_from_file
+
+        elif mode == SolvingMode.Cwnds:
+            pb = pu.LpProblem("Subflow congestion windows repartition", pu.LpMaximize)
+
+            upperBound =  self.j["receiver"]["rcv_buffer"],
+            tab[SymbolNames.ReceiverWindow.value] = upperBound
+            throughput = sp_to_pulp(to_substitute, self.sender.bytes_sent)
+            print( type(res), res)
+            pb += throughput
+            translate_subflow_cwnd = def test(sf):
+                if sf.cwnd_from_file:
+                    return sf.cwnd_from_file
+                else:
+                    return pu.LpVariable(sym.name, lowBound=0, upBound=upperBound, cat=pu.LpInteger )
+
+        else:
+            raise Exception("unsupported mode")
+        
+        for sf in self.sender.subflows.values():
+            sym = sf.cwnd
+              # translation = pu.LpVariable(sym.name, lowBound=0, upBound=upperBound, cat=pu.LpInteger )
+                # translation.upBound=upperBound 
+                # cwnd_from_file must be set ! it's an integer
+            tab.update({sym.name: translate_subflow_cwnd(sf)})
+       
+        # TODO build translation table
+        # selects only the variables that are assigned to cwnds
+        cwnds = []
+        for name, val in translation_dict.items():
+            if name.startswith("cwnd"):
+                cwnds.append(val)
+        
+        
+        pb +=  sum(cwnds) <= lp_rcv_wnd
+
+        constraints = self.sender.constraints
+        for constraint in constraints:
+            print("Adding constraint")
+            pb += sp_to_pulp(translation_dict, constraint.size) <= sp_to_pulp(translation_dict, constraint.wnd)
         # there is a common constraint to all problems, sum(cwnd) <= bound
 
         # TODO add constraint that all windows must be inferior to size of buffer
@@ -839,7 +902,7 @@ class Simulator:
         """
         # todo substitute cwnd
 
-        pb = pu.LpProblem("Subflow congestion windows repartition", pu.LpMinimize)
+        pb = pu.LpProblem("Finding minimum required buffer size", pu.LpMinimize)
 
         lp_rcv_wnd = pu.LpVariable(SymbolNames.ReceiverWindow.value, lowBound=0, cat=pu.LpInteger )
         def _build_translation_table( ):
@@ -866,15 +929,15 @@ class Simulator:
 
         # we need to add constraints
         # pb +=  sum(to_substitute.values()) <= upper_bound
-        cwnds = []
-        for name, val in translation_dict.items():
-            if name.startswith("cwnd"):
-                cwnds.append(val)
-        pb +=  sum(cwnds) <= lp_rcv_wnd
-        constraints = self.sender.constraints
-        for constraint in constraints:
-            print("Adding constraint")
-            pb += sp_to_pulp(translation_dict, constraint.size) <= sp_to_pulp(translation_dict, constraint.wnd)
+        # cwnds = []
+        # for name, val in translation_dict.items():
+        #     if name.startswith("cwnd"):
+        #         cwnds.append(val)
+        # pb +=  sum(cwnds) <= lp_rcv_wnd
+        # constraints = self.sender.constraints
+        # for constraint in constraints:
+        #     print("Adding constraint")
+        #     pb += sp_to_pulp(translation_dict, constraint.size) <= sp_to_pulp(translation_dict, constraint.wnd)
 
         self._solve_pb(pb, "buffer.lp")
 
