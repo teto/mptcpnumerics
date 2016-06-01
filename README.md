@@ -7,7 +7,8 @@ format de fichiers:
 
 rcv_buffer/snd_buffer are in KB.
 fowd/bowd are in ms
-loss/cwnd are in % .
+loss is in % .
+cwnd is the size of the subflow congestion window in (kbytes)
 (cwnd might disappear and loss is not used yet)
 
 

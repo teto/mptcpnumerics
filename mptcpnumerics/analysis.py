@@ -18,6 +18,7 @@ from collections import namedtuple
 import sortedcontainers
 import pulp as pu
 import pprint
+import shlex
 
 log = logging.getLogger("mptcpnumerics")
 log.setLevel(logging.DEBUG)
@@ -59,17 +60,24 @@ constraint_types = [
 #     res = pu.LpAffineExpression(temp, )
 #     return res
 
-def sp_to_pulp_v2(translation_dict, expr):
+# variables = [
+#         rcv_win: 
+#         ]
+
+
+def sp_to_pulp(translation_dict, expr):
     """
+    Converts a sympy expression into a pulp.LpAffineExpression
     :param translation_dict
     :expr sympy expression
     """
     f = sp.lambdify( expr.free_symbols, expr) 
-    values = map( lambda x: translation_dict[x], expr.free_symbols)
+    values = map( lambda x: translation_dict[x.name], expr.free_symbols)
     return f(*values)
 
 
-
+class SymbolNames(Enum):
+    ReceiverWindow = "rcv_wnd"
 
 # print("coef ", var,  " ", coef)
 def dump_translation_dict(d):
@@ -86,7 +94,7 @@ def post_simulation(f):
 
     def wrapped(self, *args):
         print("wrapped")
-        if Simulator.current_time >= self.stop_time:
+        if self.is_finished():
             return f(self, *args)
         else:   
             print("Please run simulation first")
@@ -313,10 +321,11 @@ class MpTcpSubflow:
     # may change
     # should be sympy symbols ?
     # fixed values
-    def __init__(self, upper_bound,  name,  mss, fowd, bowd, loss, var, cwnd=None, **extra):
+    def __init__(self, upper_bound,  name,  mss, fowd, bowd, loss, var, cwnd, **extra):
         """
         In this simulator, the cwnd is considered as constant, at its maximum.
         Hence the value given here will remain
+        :param cwnd careful, there are 2 variables here, one symbolic, one a hard value
         """
         # self.sender = sender
             # loaded_cwnd = sf_dict.get("cwnd", self.rcv_wnd)
@@ -324,6 +333,7 @@ class MpTcpSubflow:
         # upper_bound = min( upper_bound, cwnd ) if cwnd else upper_bound
         # cwnd = pu.LpVariable (name, 0, upper_bound)
         # self.cwnd = cwnd
+        self.cwnd_from_file = cwnd
         self.cwnd = sp.Symbol("cwnd_{%s}" % name, positive=True)
         sp.refine(self.cwnd, sp.Q.positive(upper_bound - self.cwnd))
 
@@ -590,7 +600,7 @@ class MpTcpReceiver:
 
     def __init__(self, rcv_wnd, capabilities, config):
         """
-        rcv_wnd_max 
+        :param rcv_wnd
         """
         self.config = config
         # self.rcv_wnd_max = max_rcv_wnd
@@ -770,21 +780,12 @@ class Simulator:
         self.constraints =[]
         # expression of the objective function
         self.throughput = None
+        self.finished = False
 
 
-    def build_translation_table(self):
-        """
-        Builds a dictionary that maps all the sympy variables to pulp variables
-        """
-        # TODO fix upperBound
-        tab= {}
-        upperBound = min(self.sender.snd_buf_max, self.receiver.rcv_wnd_max)
-        for sf_name, sf in self.sender.subflows.items():
-            sym = sf.cwnd
-            translation = pu.LpVariable(sym.name, lowBound=0, upBound=upperBound, cat=pu.LpInteger )
-            tab.update( {sym: translation})
-        return tab
-
+    def is_finished(self,):
+        # return self.current_time >= self.time_limit
+        return self.finished
 
     def add(self, p):
         """
@@ -810,6 +811,15 @@ class Simulator:
         """
         factorize some code
         """
+
+        # there is a common constraint to all problems, sum(cwnd) <= bound
+
+        # TODO add constraint that all windows must be inferior to size of buffer
+        # seulement les cwnd
+        # pb +=  sum(to_substitute.values()) <= upper_bound
+
+        # https://pythonhosted.org/PuLP/pulp.html
+        # The problem data is written to an .lp file
         pb.writeLP(output)
 
         pb.solve()
@@ -825,35 +835,84 @@ class Simulator:
     def compute_required_buffer(self):
         """
         Objective function is to minimize buffer size.
+        Subflow congestion windows are known
         """
         # todo substitute cwnd
 
         pb = pu.LpProblem("Subflow congestion windows repartition", pu.LpMinimize)
 
-        translation_dict = build_translation_table()
-        objective_fn = sp_to_pulp_v2( 
-        pb += self.receiver.rcv_wnd_max, "Maximum receive window"
+        lp_rcv_wnd = pu.LpVariable(SymbolNames.ReceiverWindow.value, lowBound=0, cat=pu.LpInteger )
+        def _build_translation_table( ):
+            """
+            Builds a dictionary that maps all the sympy variables to pulp variables
+            :param max_wnd can be set either to integer (real value) or to an LpVariable
+            """
+            # in principle rcv_wnd is always a sympy symbol
+            tab= {
+                    SymbolNames.ReceiverWindow.value: lp_rcv_wnd,
+            }
 
-        # we need 
+            for sf_name, sf in self.sender.subflows.items():
+                sym = sf.cwnd
+                # translation = pu.LpVariable(sym.name, lowBound=0, upBound=upperBound, cat=pu.LpInteger )
+                # translation.upBound=upperBound 
+                tab.update({sym.name: sf.cwnd_from_file})
+            return tab
+
+        translation_dict = _build_translation_table()
+        # pu_max_rcv_wnd = sp_to_pulp(translation_dict, self.receiver.rcv_wnd_max, )
+        # pb += pu_max_rcv_wnd, "Maximum receive window"
+        pb += lp_rcv_wnd, "Maximum receive window"
+
+        # we need to add constraints
+        # pb +=  sum(to_substitute.values()) <= upper_bound
+        cwnds = []
+        for name, val in translation_dict.items():
+            if name.startswith("cwnd"):
+                cwnds.append(val)
+        pb +=  sum(cwnds) <= lp_rcv_wnd
+        constraints = self.sender.constraints
+        for constraint in constraints:
+            print("Adding constraint")
+            pb += sp_to_pulp(translation_dict, constraint.size) <= sp_to_pulp(translation_dict, constraint.wnd)
 
         self._solve_pb(pb, "buffer.lp")
 
 
+    @post_simulation
     # def solve_constraints(self, backend="pulp"):
-    def compute_optimal_cwnds(self, ):
+    def compute_optimal_cwnds(self):
         """
         Converts from sympy to pulp
         https://github.com/uqfoundation/mystic
         http://www.pyomo.org/
         https://github.com/coin-or/pulp
+
+        Receive buffer size is known but not the congestion windows
         """
-
-
         #create a binary variable to state that a table setting is used
         pb = pu.LpProblem("Subflow congestion windows repartition", pu.LpMaximize)
 
         # pb += self.sender.bytes_sent, "objective function"
 
+        def _build_translation_table(self, ):
+            """
+            Builds a dictionary that maps all the sympy variables to pulp variables
+            :param max_wnd can be set either to integer (real value) or to an LpVariable
+            """
+            # min(self.sender.snd_buf_max, self.receiver.rcv_wnd_max)
+            upperBound =  self.j["receiver"]["rcv_buffer"],
+            # in principle rcv_wnd is always a sympy symbol
+            tab= {
+                    "rcv_wnd": upper_bound,
+            }
+            # TODO fix upperBound
+
+            for sf_name, sf in self.sender.subflows.items():
+                sym = sf.cwnd
+                translation = pu.LpVariable(sym.name, lowBound=0, upBound=upperBound, cat=pu.LpInteger )
+                tab.update( {sym: translation})
+            return tab
         upper_bound = min(self.sender.snd_buf_max, self.receiver.rcv_wnd_max)
 
         to_substitute = {}
@@ -884,12 +943,14 @@ class Simulator:
 
         # pp = pprint.PrettyPrinter(indent=4)
         # pp.pprint(to_substitute)
-        res = sp_to_pulp_v2(to_substitute, self.sender.bytes_sent)
+        res = sp_to_pulp(to_substitute, self.sender.bytes_sent)
         print( type(res), res)
         pb += res
-        # TODO add constraint that all windows must be inferior to size of buffer
-        pb +=  sum(to_substitute.values()) <= upper_bound
 
+
+        constraints = self.sender.constraints
+        for constraint in constraints:
+            pb += sp_to_pulp(to_substitute, constraint.size) <= sp_to_pulp(to_substitue, constraint.wnd)
 
         # .atoms(Symbol)
         # .free_symbols
@@ -902,14 +963,6 @@ class Simulator:
         #                         lowBound = 0,
         #                         upBound = 1,
         #                         cat = pu.LpInteger)
-        
-        # TODO il faut ajouter la fct objectif
-        # pb += 
-        
-        
-        
-        # https://pythonhosted.org/PuLP/pulp.html
-        # The problem data is written to an .lp file
         self._solve_pb(pb, "cwnds.lp")
 
 
@@ -917,7 +970,7 @@ class Simulator:
         """
         Starts running the simulation
         """
-
+        assert not self.is_finished()
         log.info("Starting simulation,  %d queued events " % len(self.events))
         for e in self.events:
 
@@ -943,6 +996,7 @@ class Simulator:
             else:
                 log.error("No pkt sent by either receiver or sender")
 
+        self.finished = True
         # constraints = []
         # self.sender.constraints()
         # return constraints
@@ -1024,14 +1078,19 @@ class MpTcpNumerics(cmd.Cmd):
 
     def do_compute_rto_constraints(self, args):
         """
+        Find out the amount of buffer required
         """
         parser = argparse.ArgumentParser(description="hello world")
         # parser.add_argument('constraint', metavar="SUBFLOW ID", choices=constraint_types,
                 # help="");
-        parser.add_argument('subflow', metavar="SUBFLOW ID", choices=list(map(lambda x: x["name"], self.j["subflows"])) , 
+        parser.add_argument('subflow', metavar="SUBFLOW_ID", 
+                choices=list(map(lambda x: x["name"], self.j["subflows"])) , 
                 help="Choose for which subflow to compute RTO requirements")
-        for subflow in self.j:
-            self.per_subflow_rto_constraints(subflow)
+        print("HELLO WORLD")
+        print("names:", list(map(lambda x: x["name"], self.j["subflows"])))
+        res = parser.parse_args(shlex.split(args))
+        # for subflow in self.j:
+        self.per_subflow_rto_constraints(res.subflow)
 
     def do_subflow_rto_constraints(self, args):
         # use args as the name of the subflow ids
@@ -1043,7 +1102,7 @@ class MpTcpNumerics(cmd.Cmd):
         """
         # TODO should be 
         capabilities = self.j["capabilities"]
-        rcv_wnd = sp.Symbol("rcv_wnd", positive=True)
+        rcv_wnd = sp.Symbol(SymbolNames.ReceiverWindow.value, positive=True)
         receiver = MpTcpReceiver(rcv_wnd, capabilities, self.j)
         sender = MpTcpSender(rcv_wnd, self.j,) 
 
@@ -1075,6 +1134,7 @@ class MpTcpNumerics(cmd.Cmd):
         
         # TODO remove ?
         # sim.solve_constraints()
+        sim.compute_required_buffer ()
 
 
     def _compute_constraints(self, duration):
