@@ -133,6 +133,14 @@ def rto(rtt, svar):
 
 
 class SolvingMode(Enum):
+    """
+    RcvBuffer: gives the required buffer size depending on scheduling
+    
+   OneWindow 
+
+
+    Cwnds: Find the window combinations that give the best throughput
+    """
     RcvBuffer = "buffer"
     OneWindow = "single_cwnd"
     Cwnds = "cwnds"
@@ -495,8 +503,10 @@ class MpTcpSender:
         return self.snd_next
         # return max(self.subflows, "dsn", 0)
 
-    def add_constraint(self, size, rcv_wnd):
-        c = Constraint(Simulator.current_time, size, rcv_wnd)
+    def add_constraint(self, size, available_window):
+        c = Constraint(Simulator.current_time, size, available_window)
+        log.debug("New constraint: %r < %s" % (c.size, available_window) )
+        # y ajouter la contrainte
         self.constraints.append(c)
 
     def send(self, sf_id):
@@ -516,7 +526,7 @@ class MpTcpSender:
         self.snd_next += pkt.size 
         self.bytes_sent += pkt.size
 
-        self.add_constraint(pkt.size, self.rcv_wnd)
+        self.add_constraint(pkt.size, self.available_window())
         return pkt
 
     #     # a
@@ -825,17 +835,22 @@ class Simulator:
         """
         pb = None
         tab = {SymbolNames.ReceiverWindow.value: None,}
+        lp_rcv_wnd = None
 
         # translate_subflow_symbol = None
         translate_subflow_cwnd = None
         if mode == SolvingMode.RcvBuffer:
             pb = pu.LpProblem("Finding minimum required buffer size", pu.LpMinimize)
             lp_rcv_wnd = pu.LpVariable(SymbolNames.ReceiverWindow.value, lowBound=0, cat=pu.LpInteger )
-            pb += lp_rcv_wnd, "Maximum receive window"
+            pb += lp_rcv_wnd, "Buffer size"
             tab[SymbolNames.ReceiverWindow.value] = lp_rcv_wnd
-            translate_subflow_cwnd = def test(sf):
+            def test(sf):
                 assert isinstance(sf.cwnd_from_file, int)
                 return sf.cwnd_from_file
+            translate_subflow_cwnd = test
+
+            # en fait ca c faut on peut avoir des cwnd , c juste le inflight qui doit pas depasser
+            # pb +=  sum(cwnds) <= lp_rcv_wnd
 
         elif mode == SolvingMode.Cwnds:
             pb = pu.LpProblem("Subflow congestion windows repartition", pu.LpMaximize)
@@ -845,14 +860,15 @@ class Simulator:
             throughput = sp_to_pulp(to_substitute, self.sender.bytes_sent)
             print( type(res), res)
             pb += throughput
-            translate_subflow_cwnd = def test(sf):
+            def test(sf):
                 if sf.cwnd_from_file:
                     return sf.cwnd_from_file
                 else:
                     return pu.LpVariable(sym.name, lowBound=0, upBound=upperBound, cat=pu.LpInteger )
+            translate_subflow_cwnd = test
 
         else:
-            raise Exception("unsupported mode")
+            raise Exception("unsupported mode %r " % mode)
         
         for sf in self.sender.subflows.values():
             sym = sf.cwnd
@@ -864,17 +880,22 @@ class Simulator:
         # TODO build translation table
         # selects only the variables that are assigned to cwnds
         cwnds = []
-        for name, val in translation_dict.items():
+        for name, val in tab.items():
             if name.startswith("cwnd"):
                 cwnds.append(val)
         
         
-        pb +=  sum(cwnds) <= lp_rcv_wnd
+
+        # for sf in self.sender.subflows.values():
+        #     pb +=  sum(cwnds) <= lp_rcv_wnd
+
+        print("Using tab=", tab)
 
         constraints = self.sender.constraints
         for constraint in constraints:
-            print("Adding constraint")
-            pb += sp_to_pulp(translation_dict, constraint.size) <= sp_to_pulp(translation_dict, constraint.wnd)
+            lp_constraint = sp_to_pulp(tab, constraint.size) <= sp_to_pulp(tab, constraint.wnd)
+            print("Adding constraint: " , lp_constraint)
+            pb += lp_constraint
         # there is a common constraint to all problems, sum(cwnd) <= bound
 
         # TODO add constraint that all windows must be inferior to size of buffer
@@ -899,6 +920,8 @@ class Simulator:
         """
         Objective function is to minimize buffer size.
         Subflow congestion windows are known
+
+        DEPRECATED Removed in favor of _solve_pb
         """
         # todo substitute cwnd
 
@@ -1095,6 +1118,7 @@ class MpTcpNumerics(cmd.Cmd):
             # self.sender = 
             # self.subflows = map( lambda x: MpTcpSubflow(), self.j["subflows"])
             print("toto")
+        return self.j
 
     def do_print(self, args):
 
@@ -1117,6 +1141,14 @@ class MpTcpNumerics(cmd.Cmd):
     def do_cycle(self, args):
         return self._compute_cycle()
 
+
+    def _max_fowd_and_max_bowd(self):
+        """
+        """
+        max_fowd = max(self.j["subflows"], key="fowd")
+        max_bowd = max(self.j["subflows"], key="bowd")
+        return max_fowd + max_bowd
+
     def _compute_cycle(self):
         """
         returns (approximate lcm of all subflows), (perfect lcm ?)
@@ -1136,8 +1168,21 @@ class MpTcpNumerics(cmd.Cmd):
     def do_compute_constraints(self, args):
         """
         """
+
+        parser = argparse.ArgumentParser(description="hello world")
+        # subparsers = parser.add_subparsers(dest="subparser_name", title="Subparsers", )
+# subparser_csv = subparsers.add_parser('pcap2csv', parents=[pcap_parser], help='Converts pcap to a csv file')
+
+        print( (SolvingMode.__members__.keys()))
+        parser.add_argument('type', choices=SolvingMode.__members__.keys())
+        # TODO pouvoir en mettre plusieurs
+        # parser.add_argument('duration', choices=
+
+        args = parser.parse_args(shlex.split(args))
+
         duration = self._compute_cycle()
-        self._compute_constraints(duration)
+        # duration = self._compute_cycle()
+        self._compute_constraints(duration, args.type)
 
     def do_compute_rto_constraints(self, args):
         """
@@ -1200,7 +1245,10 @@ class MpTcpNumerics(cmd.Cmd):
         sim.compute_required_buffer ()
 
 
-    def _compute_constraints(self, duration):
+    def _compute_constraints(self, duration, 
+            problem_type,
+            # fainting_subflow
+            *args, **kwargs):
         """
         Options and buffer size are loaded from topologies
         Compute constraints during `duration`
@@ -1211,38 +1259,39 @@ class MpTcpNumerics(cmd.Cmd):
         """
 
         print("Cycle duration ", duration)
-        # sp.symbols("
-        # out of order queue
-        rcv_ooo = []
-
-        capabilities = self.j["capabilities"]
 
         # creation of the two hosts
-        receiver = MpTcpReceiver(capabilities, self.j)
-        sender = MpTcpSender(self.j,) 
+        capabilities = self.j["capabilities"]
+        rcv_wnd = sp.Symbol(SymbolNames.ReceiverWindow.value, positive=True)
+        receiver = MpTcpReceiver(rcv_wnd, capabilities, self.j)
+        sender = MpTcpSender(rcv_wnd, self.j,) 
 
         sim = Simulator(sender, receiver)
 
         # we start sending a full window over each path
             # sort them depending on fowd
-        subflows = sorted(self.j["subflows"] , key=lambda x: x["fowd"] , reverse=True)
+        log.info("Initial send")
+        subflows = sender.subflows.values()
+        subflows = sorted(subflows, key=lambda x: x.fowd, reverse=True)
 
         # global current_time
         # current_time = 0
-
-        log.info("Initial send")
-        while sender.available_window():
-            for sf in subflows:
-            # TODO check how to insert in 
+        for sf in subflows:
                 
-                pkt = sf.generate_pkt(0, sender.snd_next)
-                self.events.add(pkt)
+            # ca genere des contraintes
+            # pkt = sf.generate_pkt(0, sender.snd_next)
+            pkt = sender.send(sf.name)
+            # if fainting_subflow and sf == fainting_subflow:
+            #     log.debug("Mimicking an RTO => Needs to drop this pkt")
+            #     sim.stop ( fainting_subflow.rto() )
+            #     continue
+            sim.add(pkt)
+            
+        sim.run()
 
-
-
-
-        print("loop finished")
-        return
+        # sim.compute_required_buffer ()
+        print("t=", SolvingMode[problem_type])
+        sim._solve_pb(SolvingMode[problem_type], "toto")
 
     def do_export_constraints_to_cplex():
         """

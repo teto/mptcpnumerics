@@ -18,12 +18,15 @@ class TestAnalysis(TestCase):
 
         self.m = ma.MpTcpNumerics()
         # self.assertTrue
-        self.m.do_load("examples/topology.json")
+        # self.m.do_load("examples/topology.json")
 
-    def test_oneshot(self):
+    def test_double(self):
         # TODO test when launched via subprocess 
         # - with a list of commands passed via stdin
-        pass
+        # without constraints there should be a prevalent one
+        j = self.m.do_load("examples/double.json")
+        self.m.do_compute_constraints() 
+
 g    def test_batch(self):
         # Test the --batch flag
         # subprocess.Popen()
