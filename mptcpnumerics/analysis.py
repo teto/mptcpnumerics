@@ -42,6 +42,7 @@ by rcv_window
 TODO:
 -use a framework to trace some variables (save into a csv for instance)
 -support NR-sack
+-rename cwnd to max_cwnd
 """
 
 constraint_types = [
@@ -352,6 +353,7 @@ class MpTcpSubflow:
         In this simulator, the cwnd is considered as constant, at its maximum.
         Hence the value given here will remain
         :param cwnd careful, there are 2 variables here, one symbolic, one a hard value
+        # :param contribution computed by receiver
         """
         # self.sender = sender
             # loaded_cwnd = sf_dict.get("cwnd", self.rcv_wnd)
@@ -370,6 +372,7 @@ class MpTcpSubflow:
         print("%r"% self.sp_cwnd)
 
         self.name = name
+        # self.throughput = None
 
         # self.una = 0
         # TODO rename to 'inflight'
@@ -521,6 +524,10 @@ class MpTcpSender:
         # return max(self.subflows, "dsn", 0)
 
     def add_constraint(self, size, available_window):
+        """
+        Register flow control constraints so that it can be added later to
+
+        """
         c = Constraint(Simulator.current_time, size, available_window)
         log.debug("New constraint: %r < %s" % (c.size, available_window) )
         # y ajouter la contrainte
@@ -660,6 +667,7 @@ class MpTcpReceiver:
         # a list of tuples (headSeq, endSeq)
         self.out_of_order = []
         for sf in config["subflows"]:
+            sf.update( ("rx_bytes", 0))
             self.subflows.update( {sf["name"]: sf})
             # self.subflows.update( {sf["id"]: sf})
 
@@ -780,7 +788,10 @@ class MpTcpReceiver:
         self.update_out_of_order()
 
         print("TODO: check against out of order list")
+        
 
+        # we want to compute per_subflow throughput to know contributions
+        self.subflows[p.subflow_id]["rx_bytes"] += p.size 
 
         if MpTcpCapabilities.DAckReplication in self.config["receiver"]["capabilities"]:
             # for sf in self.subflows:
@@ -905,6 +916,8 @@ class Simulator:
                     pu.LpVariable(name, lowBound=0, upBound=sf.cwnd_from_file, cat=pu.LpInteger )
                     })
 
+            # bytes_sent is easy, it's like the last dsn
+            # TODO could be replaced with self.receiver.rcv_next
             throughput = sp_to_pulp(tab, self.sender.bytes_sent)
             # print( type(res), res)
             pb += throughput
