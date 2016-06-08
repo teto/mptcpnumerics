@@ -143,6 +143,7 @@ class SolvingMode(Enum):
 
 
     Cwnds: Find the window combinations that give the best throughput
+    rcv_buffer: computes Required buffer size 
     """
     RcvBuffer = "buffer"
     OneWindow = "single_cwnd"
@@ -523,7 +524,7 @@ class MpTcpSender:
         return self.snd_next
         # return max(self.subflows, "dsn", 0)
 
-    def add_constraint(self, size, available_window):
+    def add_flow_control_constraint(self, size, available_window):
         """
         Register flow control constraints so that it can be added later to
 
@@ -563,7 +564,7 @@ class MpTcpSender:
         self.snd_next += pkt.size
         self.bytes_sent += pkt.size
 
-        self.add_constraint(pkt.size, available_window)
+        self.add_flow_control_constraint(pkt.size, available_window)
         return pkt
 
     #     # a
@@ -688,7 +689,6 @@ class MpTcpReceiver:
             ooo += block.size
 
         return self.rcv_wnd_max - ooo
-    #- inflight
 
     def left_edge(self):
         """
@@ -806,6 +806,8 @@ class MpTcpReceiver:
         # print(packets)
         return packets
 
+
+
 class Simulator:
     """
     You should start feeding some packets/events (equivalent in this simulator)
@@ -871,7 +873,16 @@ class Simulator:
             output,
         backend="pulp"):
         """
+        TODO need to be able to 
         factorize some code
+
+        :param mode: solving mode
+        :rtype: a dictionary {
+            "status":
+            "throughput":
+            "rcv_buffer":
+            "cwnds": []
+        }
         """
         pb = None
         tab = {SymbolNames.ReceiverWindow.value: None,}
@@ -957,6 +968,13 @@ class Simulator:
         pb.writeLP(output)
 
         pb.solve()
+        # returned dictionary
+        ret = {
+                "status": pu.LpStatus[pb.status],
+                "rcv_buffer": pb.variables()[SymbolNames.ReceiverWindow.value],
+                "throughput": 0,
+                "variables": [],
+        }
         # The status of the solution is printed to the screen
         print("Status:", pu.LpStatus[pb.status])
         # Each of the variables is printed with it's resolved optimum value
@@ -964,6 +982,7 @@ class Simulator:
             print(v.name, "=", v.varValue)
         # The optimised objective function value is printed to the screen
         # print("Total Cost of Ingredients per can = ", value(pb.objective))
+        return ret
 
     @post_simulation
     def compute_required_buffer(self):
@@ -1012,7 +1031,7 @@ class Simulator:
         #     print("Adding constraint")
         #     pb += sp_to_pulp(translation_dict, constraint.size) <= sp_to_pulp(translation_dict, constraint.wnd)
 
-        self._solve_pb(pb, "buffer.lp")
+        ret = self._solve_pb(pb, "buffer.lp")
 
 
     @post_simulation
@@ -1099,7 +1118,8 @@ class Simulator:
         #                         lowBound = 0,
         #                         upBound = 1,
         #                         cat = pu.LpInteger)
-        self._solve_pb(pb, "cwnds.lp")
+        status = self._solve_pb(pb, "cwnds.lp")
+        print("status=", ret["status"])
 
 
     def run(self):
@@ -1228,7 +1248,8 @@ class MpTcpNumerics(cmd.Cmd):
 # subparser_csv = subparsers.add_parser('pcap2csv', parents=[pcap_parser], help='Converts pcap to a csv file')
 # self.subflows.keys()
         print( (SolvingMode.__members__.keys()))
-        parser.add_argument('type', choices=SolvingMode.__members__.keys())
+        parser.add_argument('type', choices=SolvingMode.__members__.keys(), help="Choose a solving mode")
+        parser.add_argument('--spread', choices=SolvingMode.__members__.keys())
         # TODO pouvoir en mettre plusieurs
         # parser.add_argument('duration', choices=
 
@@ -1346,7 +1367,10 @@ class MpTcpNumerics(cmd.Cmd):
 
         # sim.compute_required_buffer ()
         print("t=", SolvingMode[problem_type])
-        sim._solve_pb(SolvingMode[problem_type], "toto")
+        ret = sim._solve_pb(SolvingMode[problem_type], "toto")
+        print("status=", ret["status"])
+        if args.spread:
+            print("TODO")
 
     def do_export_constraints_to_cplex():
         """
