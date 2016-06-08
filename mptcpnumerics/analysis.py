@@ -550,13 +550,13 @@ class MpTcpSender:
         # e.subflow_id = sf_id
         assert self.subflows[sf_id].busy() == False
 
-
+        available_window = self.available_window()
         dsn = self.snd_nxt()
         pkt = self.subflows[sf_id].generate_pkt(dsn)
         self.snd_next += pkt.size
         self.bytes_sent += pkt.size
 
-        self.add_constraint(pkt.size, self.available_window())
+        self.add_constraint(pkt.size, available_window)
         return pkt
 
     #     # a
