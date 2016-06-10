@@ -68,6 +68,8 @@ constraint_types = [
 #         ]
 
 
+PerSubflowResult = namedtuple('PerSubflowResult', ["cwnd", "throughput", ])
+
 def sp_to_pulp(translation_dict, expr):
     """
     Converts a sympy expression into a pulp.LpAffineExpression
@@ -668,7 +670,8 @@ class MpTcpReceiver:
         # a list of tuples (headSeq, endSeq)
         self.out_of_order = []
         for sf in config["subflows"]:
-            sf.update( ("rx_bytes", 0))
+            # print(type(sf))
+            sf.update( {"rx_bytes": 0})
             self.subflows.update( {sf["name"]: sf})
             # self.subflows.update( {sf["id"]: sf})
 
@@ -871,7 +874,10 @@ class Simulator:
             mode : SolvingMode,
             # translation_dict,
             output,
-        backend="pulp"):
+        min_throughputs,
+        backend="pulp",
+        **kwargs
+        ):
         """
         TODO need to be able to 
         factorize some code
@@ -895,7 +901,7 @@ class Simulator:
 
         # translate_subflow_symbol = None
         translate_subflow_cwnd = None
-        if mode == SolvingMode.RcvBuffer:
+        if mode == SolvingMode.RcvBuffer.value:
             pb = pu.LpProblem("Finding minimum required buffer size", pu.LpMinimize)
             lp_rcv_wnd = pu.LpVariable(SymbolNames.ReceiverWindow.value, lowBound=0, cat=pu.LpInteger )
             pb += lp_rcv_wnd, "Buffer size"
@@ -906,7 +912,7 @@ class Simulator:
             # en fait ca c faut on peut avoir des cwnd , c juste le inflight qui doit pas depasser
             # pb +=  sum(cwnds) <= lp_rcv_wnd
 
-        elif mode == SolvingMode.Cwnds:
+        elif mode == SolvingMode.Cwnds.value:
             pb = pu.LpProblem("Subflow congestion windows repartition", pu.LpMaximize)
 
             upperBound =  self.config["receiver"]["rcv_buffer"]
@@ -931,13 +937,14 @@ class Simulator:
             # TODO could be replaced with self.receiver.rcv_next
             throughput = sp_to_pulp(tab, self.sender.bytes_sent)
             # print( type(res), res)
-            pb += throughput
+            pb.setObjective(throughput)
 
         else:
             raise Exception("unsupported mode %r " % mode)
 
 
-
+        # TODO pb.extend
+        # TODO can use with sequentialSolve
         # TODO build translation table
         # selects only the variables that are assigned to cwnds
         cwnds = []
@@ -945,6 +952,10 @@ class Simulator:
             if name.startswith("cwnd"):
                 cwnds.append(val)
 
+
+        # add sfmin arguments
+        for toto, min_ratio in min_throughputs:
+            print("name/ratio", toto, min_ratio)
 
 
         # for sf in self.sender.subflows.values():
@@ -957,8 +968,10 @@ class Simulator:
             lp_constraint = sp_to_pulp(tab, constraint.size) <= sp_to_pulp(tab, constraint.wnd)
             print("Adding constraint: " , lp_constraint)
             pb += lp_constraint
+        print("Pb has %d" % pb.numConstraints() )
         # there is a common constraint to all problems, sum(cwnd) <= bound
 
+        # pb.assignVarsVals
         # TODO add constraint that all windows must be inferior to size of buffer
         # seulement les cwnd
         # pb +=  sum(to_substitute.values()) <= upper_bound
@@ -969,157 +982,166 @@ class Simulator:
 
         pb.solve()
         # returned dictionary
+        # pb.constraints 
         ret = {
                 "status": pu.LpStatus[pb.status],
-                "rcv_buffer": pb.variables()[SymbolNames.ReceiverWindow.value],
+                # "rcv_buffer": pb.variables()[SymbolNames.ReceiverWindow.value],
                 "throughput": 0,
                 "variables": [],
+                "subflows": []
         }
+
+        # once pb is solved, we can return the per-subflow throughput
+        for sb in self.receiver.subflows:
+#[p.subflow_id]["rx_bytes"] += p.size 
+            expr = sp_to_pulp(tab, sf["rx_bytes"])
+            print("EXPR=", expr)
+
         # The status of the solution is printed to the screen
         print("Status:", pu.LpStatus[pb.status])
+
+        ret["variables"] = pb.variables()
         # Each of the variables is printed with it's resolved optimum value
-        for v in pb.variables():
-            print(v.name, "=", v.varValue)
+        for name, value in pb.variablesDict().items():
+            print(name, "=", value)
         # The optimised objective function value is printed to the screen
         # print("Total Cost of Ingredients per can = ", value(pb.objective))
         return ret
 
-    @post_simulation
-    def compute_required_buffer(self):
-        """
-        Objective function is to minimize buffer size.
-        Subflow congestion windows are known
+    # @post_simulation
+    # def compute_required_buffer(self):
+    #     """
+    #     Objective function is to minimize buffer size.
+    #     Subflow congestion windows are known
 
-        DEPRECATED Removed in favor of _solve_pb
-        """
-        # todo substitute cwnd
+    #     DEPRECATED Removed in favor of _solve_pb
+    #     """
+    #     # todo substitute cwnd
 
-        pb = pu.LpProblem("Finding minimum required buffer size", pu.LpMinimize)
+    #     pb = pu.LpProblem("Finding minimum required buffer size", pu.LpMinimize)
 
-        lp_rcv_wnd = pu.LpVariable(SymbolNames.ReceiverWindow.value, lowBound=0, cat=pu.LpInteger )
-        def _build_translation_table( ):
-            """
-            Builds a dictionary that maps all the sympy variables to pulp variables
-            :param max_wnd can be set either to integer (real value) or to an LpVariable
-            """
-            # in principle rcv_wnd is always a sympy symbol
-            tab= {
-                    SymbolNames.ReceiverWindow.value: lp_rcv_wnd,
-            }
+    #     lp_rcv_wnd = pu.LpVariable(SymbolNames.ReceiverWindow.value, lowBound=0, cat=pu.LpInteger )
+    #     def _build_translation_table( ):
+    #         """
+    #         Builds a dictionary that maps all the sympy variables to pulp variables
+    #         :param max_wnd can be set either to integer (real value) or to an LpVariable
+    #         """
+    #         # in principle rcv_wnd is always a sympy symbol
+    #         tab= {
+    #                 SymbolNames.ReceiverWindow.value: lp_rcv_wnd,
+    #         }
 
-            for sf_name, sf in self.sender.subflows.items():
-                sym = sf.cwnd
-                # translation = pu.LpVariable(sym.name, lowBound=0, upBound=upperBound, cat=pu.LpInteger )
-                # translation.upBound=upperBound
-                tab.update({sym.name: sf.cwnd_from_file})
-            return tab
+    #         for sf_name, sf in self.sender.subflows.items():
+    #             sym = sf.cwnd
+    #             # translation = pu.LpVariable(sym.name, lowBound=0, upBound=upperBound, cat=pu.LpInteger )
+    #             # translation.upBound=upperBound
+    #             tab.update({sym.name: sf.cwnd_from_file})
+    #         return tab
 
-        translation_dict = _build_translation_table()
-        # pu_max_rcv_wnd = sp_to_pulp(translation_dict, self.receiver.rcv_wnd_max, )
-        # pb += pu_max_rcv_wnd, "Maximum receive window"
-        pb += lp_rcv_wnd, "Maximum receive window"
+    #     translation_dict = _build_translation_table()
+    #     # pu_max_rcv_wnd = sp_to_pulp(translation_dict, self.receiver.rcv_wnd_max, )
+    #     # pb += pu_max_rcv_wnd, "Maximum receive window"
+    #     pb += lp_rcv_wnd, "Maximum receive window"
 
-        # we need to add constraints
-        # pb +=  sum(to_substitute.values()) <= upper_bound
-        # cwnds = []
-        # for name, val in translation_dict.items():
-        #     if name.startswith("cwnd"):
-        #         cwnds.append(val)
-        # pb +=  sum(cwnds) <= lp_rcv_wnd
-        # constraints = self.sender.constraints
-        # for constraint in constraints:
-        #     print("Adding constraint")
-        #     pb += sp_to_pulp(translation_dict, constraint.size) <= sp_to_pulp(translation_dict, constraint.wnd)
-
-        ret = self._solve_pb(pb, "buffer.lp")
+    #     # we need to add constraints
+    #     # pb +=  sum(to_substitute.values()) <= upper_bound
+    #     # cwnds = []
+    #     # for name, val in translation_dict.items():
+    #     #     if name.startswith("cwnd"):
+    #     #         cwnds.append(val)
+    #     # pb +=  sum(cwnds) <= lp_rcv_wnd
+    #     # constraints = self.sender.constraints
+    #     # for constraint in constraints:
+    #     #     print("Adding constraint")
+    #     #     pb += sp_to_pulp(translation_dict, constraint.size) <= sp_to_pulp(translation_dict, constraint.wnd)
 
 
-    @post_simulation
-    # def solve_constraints(self, backend="pulp"):
-    def compute_optimal_cwnds(self):
-        """
-        Converts from sympy to pulp
-        https://github.com/uqfoundation/mystic
-        http://www.pyomo.org/
-        https://github.com/coin-or/pulp
 
-        Receive buffer size is known but not the congestion windows
-        """
-        #create a binary variable to state that a table setting is used
-        pb = pu.LpProblem("Subflow congestion windows repartition", pu.LpMaximize)
+    # @post_simulation
+    # # def solve_constraints(self, backend="pulp"):
+    # def compute_optimal_cwnds(self):
+    #     """
+    #     Converts from sympy to pulp
+    #     https://github.com/uqfoundation/mystic
+    #     http://www.pyomo.org/
+    #     https://github.com/coin-or/pulp
 
-        # pb += self.sender.bytes_sent, "objective function"
+    #     Receive buffer size is known but not the congestion windows
+    #     """
+    #     #create a binary variable to state that a table setting is used
+    #     pb = pu.LpProblem("Subflow congestion windows repartition", pu.LpMaximize)
 
-        def _build_translation_table(self, ):
-            """
-            Builds a dictionary that maps all the sympy variables to pulp variables
-            :param max_wnd can be set either to integer (real value) or to an LpVariable
-            """
-            # min(self.sender.snd_buf_max, self.receiver.rcv_wnd_max)
-            upperBound =  self.j["receiver"]["rcv_buffer"],
-            # in principle rcv_wnd is always a sympy symbol
-            tab= {
-                    "rcv_wnd": upper_bound,
-            }
-            # TODO fix upperBound
+    #     # pb += self.sender.bytes_sent, "objective function"
 
-            for sf_name, sf in self.sender.subflows.items():
-                sym = sf.cwnd
-                translation = pu.LpVariable(sym.name, lowBound=0, upBound=upperBound, cat=pu.LpInteger )
-                tab.update( {sym: translation})
-            return tab
-        upper_bound = min(self.sender.snd_buf_max, self.receiver.rcv_wnd_max)
+    #     def _build_translation_table(self, ):
+    #         """
+    #         Builds a dictionary that maps all the sympy variables to pulp variables
+    #         :param max_wnd can be set either to integer (real value) or to an LpVariable
+    #         """
+    #         # min(self.sender.snd_buf_max, self.receiver.rcv_wnd_max)
+    #         upperBound =  self.j["receiver"]["rcv_buffer"],
+    #         # in principle rcv_wnd is always a sympy symbol
+    #         tab= {
+    #                 "rcv_wnd": upper_bound,
+    #         }
+    #         # TODO fix upperBound
 
-        to_substitute = {}
-        to_substitute = build_translation_table()
-        # def build_translation_table_v2():
-        # TODO replace sympy variables in constraints with pulp variables.
-        # expr.subs() ; can be used with a dict
-        # constraints = self.sender.constraints
-        # for constraint in constraints:
-        #     for sym in constraint.free_symbols():
-        #         # ...
-        #         translation = already_translated.get(sym, None)
-        #         if translation is None:
-        #             # TODO generate an LpVariable
-        #             # generate depending on sym.name
-        #             # ...
-        #             # LpConstraint,
-        #             # if sp.ask.ask(sq.Q.integer(sym)):
-        #             # if sp.ask(sq.Q.integer(sym):
-        #             # cat='Continuous'"Integer"
-        #             translation = pu.LpVariable(sym.name, cat=pu.LpInteger )
-        #             # ideally we should be able to inherit bounds from sympy symbols but this looks hard
-        #             # thus we hardcode them there
-        #             translation.lowBound =  0
-        #             translation.upBound = upper_bound
-        #             # pu.LpConstraint
-        #             to_substitute.update( (sym, translation) )
+    #         for sf_name, sf in self.sender.subflows.items():
+    #             sym = sf.cwnd
+    #             translation = pu.LpVariable(sym.name, lowBound=0, upBound=upperBound, cat=pu.LpInteger )
+    #             tab.update( {sym: translation})
+    #         return tab
+    #     upper_bound = min(self.sender.snd_buf_max, self.receiver.rcv_wnd_max)
 
-        # pp = pprint.PrettyPrinter(indent=4)
-        # pp.pprint(to_substitute)
-        res = sp_to_pulp(to_substitute, self.sender.bytes_sent)
-        print( type(res), res)
-        pb += res
+    #     to_substitute = {}
+    #     to_substitute = build_translation_table()
+    #     # def build_translation_table_v2():
+    #     # TODO replace sympy variables in constraints with pulp variables.
+    #     # expr.subs() ; can be used with a dict
+    #     # constraints = self.sender.constraints
+    #     # for constraint in constraints:
+    #     #     for sym in constraint.free_symbols():
+    #     #         # ...
+    #     #         translation = already_translated.get(sym, None)
+    #     #         if translation is None:
+    #     #             # TODO generate an LpVariable
+    #     #             # generate depending on sym.name
+    #     #             # ...
+    #     #             # LpConstraint,
+    #     #             # if sp.ask.ask(sq.Q.integer(sym)):
+    #     #             # if sp.ask(sq.Q.integer(sym):
+    #     #             # cat='Continuous'"Integer"
+    #     #             translation = pu.LpVariable(sym.name, cat=pu.LpInteger )
+    #     #             # ideally we should be able to inherit bounds from sympy symbols but this looks hard
+    #     #             # thus we hardcode them there
+    #     #             translation.lowBound =  0
+    #     #             translation.upBound = upper_bound
+    #     #             # pu.LpConstraint
+    #     #             to_substitute.update( (sym, translation) )
+
+    #     # pp = pprint.PrettyPrinter(indent=4)
+    #     # pp.pprint(to_substitute)
+    #     res = sp_to_pulp(to_substitute, self.sender.bytes_sent)
+    #     print( type(res), res)
+    #     pb += res
 
 
-        constraints = self.sender.constraints
-        for constraint in constraints:
-            pb += sp_to_pulp(to_substitute, constraint.size) <= sp_to_pulp(to_substitue, constraint.wnd)
+    #     constraints = self.sender.constraints
+    #     for constraint in constraints:
+    #         pb += sp_to_pulp(to_substitute, constraint.size) <= sp_to_pulp(to_substitue, constraint.wnd)
 
-        # .atoms(Symbol)
-        # .free_symbols
-        # symbol.name
-# symbols('a0:%d'%numEquations)
-# numbered_symbols
-        # http://docs.sympy.org/0.7.3/tutorial/basic_operations.html#substitution
-        # pu.LpVariable.dicts('table',
-        #                         possible_tables,
-        #                         lowBound = 0,
-        #                         upBound = 1,
-        #                         cat = pu.LpInteger)
-        status = self._solve_pb(pb, "cwnds.lp")
-        print("status=", ret["status"])
+    #     # .atoms(Symbol)
+    #     # .free_symbols
+    #     # symbol.name
+# # symbols('a0:%d'%numEquations)
+# # numbered_symbols
+    #     # http://docs.sympy.org/0.7.3/tutorial/basic_operations.html#substitution
+    #     # pu.LpVariable.dicts('table',
+    #     #                         possible_tables,
+    #     #                         lowBound = 0,
+    #     #                         upBound = 1,
+    #     #                         cat = pu.LpInteger)
+    #     print("status=", ret["status"])
 
 
     def run(self):
@@ -1244,11 +1266,22 @@ class MpTcpNumerics(cmd.Cmd):
         """
 
         parser = argparse.ArgumentParser(description="hello world")
-        # subparsers = parser.add_subparsers(dest="subparser_name", title="Subparsers", )
-# subparser_csv = subparsers.add_parser('pcap2csv', parents=[pcap_parser], help='Converts pcap to a csv file')
-# self.subflows.keys()
-        print( (SolvingMode.__members__.keys()))
-        parser.add_argument('type', choices=SolvingMode.__members__.keys(), help="Choose a solving mode")
+        # parser.add_mutually_exclusive_group()
+
+        parser.add_argument('--sfmin', nargs=2, action="append", 
+# default=[],
+                # choices=self.config.subflows.keys(), 
+                help="Use this to force a minimum amount of throughput (%) on a subflow"
+                )
+
+        # parser.add_argument('--', action="append", default=[],
+        subparsers = parser.add_subparsers(dest="type", title="Subparsers", )
+        sub_cwnd = subparsers.add_parser(SolvingMode.Cwnds.value, parents=[], 
+                help='Converts pcap to a csv file')
+        sub_buf = subparsers.add_parser(SolvingMode.RcvBuffer.value, parents=[], 
+                help='Converts pcap to a csv file')
+        # print( (SolvingMode.__members__.keys()))
+        # parser.add_argument('type', choices=SolvingMode.__members__.keys(), help="Choose a solving mode")
         parser.add_argument('--spread', choices=SolvingMode.__members__.keys())
         # TODO pouvoir en mettre plusieurs
         # parser.add_argument('duration', choices=
@@ -1257,7 +1290,7 @@ class MpTcpNumerics(cmd.Cmd):
 
         duration = self._compute_cycle()
         # duration = self._compute_cycle()
-        self._compute_constraints(duration, args.type)
+        self._compute_constraints(duration, args.type, args)
 
     def do_compute_rto_constraints(self, args):
         """
@@ -1322,8 +1355,11 @@ class MpTcpNumerics(cmd.Cmd):
 
     def _compute_constraints(self, duration,
             problem_type,
+            args,
             # fainting_subflow
-            *args, **kwargs):
+            *vargs, 
+            **kwargs
+            ):
         """
         Options and buffer size are loaded from topologies
         Compute constraints during `duration`
@@ -1366,8 +1402,9 @@ class MpTcpNumerics(cmd.Cmd):
         sim.run()
 
         # sim.compute_required_buffer ()
-        print("t=", SolvingMode[problem_type])
-        ret = sim._solve_pb(SolvingMode[problem_type], "toto")
+        print("t=", problem_type)
+        print(args)
+        ret = sim._solve_pb(problem_type, "toto", min_throughputs=args.sfmin)
         print("status=", ret["status"])
         if args.spread:
             print("TODO")
