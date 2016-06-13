@@ -68,7 +68,7 @@ constraint_types = [
 #         ]
 
 
-PerSubflowResult = namedtuple('PerSubflowResult', ["cwnd", "throughput", ])
+PerSubflowResult = namedtuple('PerSubflowResult', ["cwnd", "throughput", "ratio"])
 
 def sp_to_pulp(translation_dict, expr):
     """
@@ -856,6 +856,11 @@ class Simulator:
             p.time = self.current_time + p.delay
 
         assert p.time >= self.current_time
+
+        if self.time_limit and self.current_time > self.time_limit:
+            print("Can't register an event after simulation limit ! Break out of the loop")
+            return
+
         log.info("Adding event %s " % p)
 
         # VERY IMPORTANT
@@ -870,18 +875,20 @@ class Simulator:
 
     # solve_constraints
     def _solve_pb(self,
-#pb,
             mode : SolvingMode,
             # translation_dict,
             output,
         min_throughputs,
+        max_throughputs,
         backend="pulp",
         **kwargs
         ):
         """
         TODO need to be able to 
         factorize some code
-
+        
+        :param min_troughputs a list of (subflow name, minimum contribution) tuples
+        :param max_troughputs a list of (subflow name, maximum contribution) tuples
         :param mode: solving mode
         :rtype: a dictionary {
             "status":
@@ -901,6 +908,8 @@ class Simulator:
 
         # translate_subflow_symbol = None
         translate_subflow_cwnd = None
+
+
         if mode == SolvingMode.RcvBuffer.value:
             pb = pu.LpProblem("Finding minimum required buffer size", pu.LpMinimize)
             lp_rcv_wnd = pu.LpVariable(SymbolNames.ReceiverWindow.value, lowBound=0, cat=pu.LpInteger )
@@ -911,6 +920,8 @@ class Simulator:
 
             # en fait ca c faut on peut avoir des cwnd , c juste le inflight qui doit pas depasser
             # pb +=  sum(cwnds) <= lp_rcv_wnd
+
+            mptcp_throughput = sp_to_pulp(tab, self.sender.bytes_sent)
 
         elif mode == SolvingMode.Cwnds.value:
             pb = pu.LpProblem("Subflow congestion windows repartition", pu.LpMaximize)
@@ -935,9 +946,20 @@ class Simulator:
 
             # bytes_sent is easy, it's like the last dsn
             # TODO could be replaced with self.receiver.rcv_next
-            throughput = sp_to_pulp(tab, self.sender.bytes_sent)
+            mptcp_throughput = sp_to_pulp(tab, self.sender.bytes_sent)
             # print( type(res), res)
-            pb.setObjective(throughput)
+            pb.setObjective(mptcp_throughput)
+            # add sfmin arguments
+
+            # ensure that subflow contribution is  at least % of total 
+            for sf_name, min_ratio in min_throughputs:
+                print("name/ratio", sf_name, min_ratio)
+                pb += sp_to_pulp(tab,self.receiver.subflows[sf_name]["rx_bytes"] )>= min_ratio * mptcp_throughput
+
+            # subflow contribution should be no more than % of total
+            for sf_name, max_ratio in max_throughputs:
+                print("name/ratio", sf_name, max_ratio)
+                pb += sp_to_pulp(tab,self.receiver.subflows[sf_name]["rx_bytes"] ) <= max_ratio * mptcp_throughput
 
         else:
             raise Exception("unsupported mode %r " % mode)
@@ -953,9 +975,8 @@ class Simulator:
                 cwnds.append(val)
 
 
-        # add sfmin arguments
-        for toto, min_ratio in min_throughputs:
-            print("name/ratio", toto, min_ratio)
+        
+
 
 
         # for sf in self.sender.subflows.values():
@@ -968,7 +989,7 @@ class Simulator:
             lp_constraint = sp_to_pulp(tab, constraint.size) <= sp_to_pulp(tab, constraint.wnd)
             print("Adding constraint: " , lp_constraint)
             pb += lp_constraint
-        print("Pb has %d" % pb.numConstraints() )
+        print("Pb has %d constraints." % pb.numConstraints() )
         # there is a common constraint to all problems, sum(cwnd) <= bound
 
         # pb.assignVarsVals
@@ -986,24 +1007,29 @@ class Simulator:
         ret = {
                 "status": pu.LpStatus[pb.status],
                 # "rcv_buffer": pb.variables()[SymbolNames.ReceiverWindow.value],
-                "throughput": 0,
+                "throughput": pu.value(mptcp_throughput),
                 "variables": [],
-                "subflows": []
+                # a list ofs PerSubflowResult 
+                "subflows": {},
+                "objective": pu.value(pb.objective)
         }
 
         # once pb is solved, we can return the per-subflow throughput
-        for sb in self.receiver.subflows:
-#[p.subflow_id]["rx_bytes"] += p.size 
-            expr = sp_to_pulp(tab, sf["rx_bytes"])
-            print("EXPR=", expr)
+        for sf_name, sf in self.receiver.subflows.items():
+            # cwnd/throughput/ratio
+            throughput = pu.value(sp_to_pulp(tab, sf["rx_bytes"]))
+            ratio = pu.value(throughput)/pu.value(mptcp_throughput)
+            cwnd = pu.value(pb.variablesDict()["cwnd_{%s}" % sf_name])
+            result = PerSubflowResult(cwnd,throughput,ratio)
+            ret["subflows"].update( { sf_name: result} )
+
+            # print("EXPR=", expr)
 
         # The status of the solution is printed to the screen
         print("Status:", pu.LpStatus[pb.status])
 
-        ret["variables"] = pb.variables()
+        ret["variables"] = pb.variablesDict()
         # Each of the variables is printed with it's resolved optimum value
-        for name, value in pb.variablesDict().items():
-            print(name, "=", value)
         # The optimised objective function value is printed to the screen
         # print("Total Cost of Ingredients per can = ", value(pb.objective))
         return ret
@@ -1153,9 +1179,9 @@ class Simulator:
         for e in self.events:
 
             self.current_time = e.time
-            if self.time_limit and self.current_time > self.time_limit:
-                print("Duration of simulation finished ! Break out of the loop")
-                break
+            # if self.time_limit and self.current_time > self.time_limit:
+            #     print("Duration of simulation finished ! Break out of the loop")
+            #     break
 
             log.debug("%d: running event %r" % (self.current_time, e))
             # events emitted by host
@@ -1268,11 +1294,6 @@ class MpTcpNumerics(cmd.Cmd):
         parser = argparse.ArgumentParser(description="hello world")
         # parser.add_mutually_exclusive_group()
 
-        parser.add_argument('--sfmin', nargs=2, action="append", 
-# default=[],
-                # choices=self.config.subflows.keys(), 
-                help="Use this to force a minimum amount of throughput (%) on a subflow"
-                )
 
         # parser.add_argument('--', action="append", default=[],
         subparsers = parser.add_subparsers(dest="type", title="Subparsers", )
@@ -1280,9 +1301,31 @@ class MpTcpNumerics(cmd.Cmd):
                 help='Converts pcap to a csv file')
         sub_buf = subparsers.add_parser(SolvingMode.RcvBuffer.value, parents=[], 
                 help='Converts pcap to a csv file')
+        sub_cwnd.add_argument('--sfmin', nargs=2, action="append", 
+                default=[],
+                metavar="<SF_NAME> <min contribution ratio>",
+                help=("Use this to force a minimum amount of throughput (%) on a subflow"
+                    "Expects 2 arguments: subflow name followed by its ratio (<1)")
+                )
+        sub_cwnd.add_argument('--sfmax', nargs=2, action="append", 
+                default=[],
+                metavar="<SF_NAME> <max contribution %>",
+                help=("Use this to force a max amount of throughput (%) on a subflow"
+                    "Expects 2 arguments: subflow name followed by its ratio (<1)")
+                )
+        sub_cwnd.add_argument('--cbr', nargs=2, action="append", 
+                default=[],
+                metavar="<SF_NAME> <max contribution %>",
+                help=("CBR: Constant Bit Rate: Tries to find a combination that minimizes"
+                    "disruption of the throughput on a loss on a path, enabled when "
+                    " reaching a threshold of X throughput")
+                )
+
         # print( (SolvingMode.__members__.keys()))
         # parser.add_argument('type', choices=SolvingMode.__members__.keys(), help="Choose a solving mode")
-        parser.add_argument('--spread', choices=SolvingMode.__members__.keys())
+        sub_cwnd.add_argument('--spread', type=int, 
+                help=("Will try to spread the load while keeping the throughput within the imposed limits"
+                "compared to the optimal case "))
         # TODO pouvoir en mettre plusieurs
         # parser.add_argument('duration', choices=
 
@@ -1290,7 +1333,10 @@ class MpTcpNumerics(cmd.Cmd):
 
         duration = self._compute_cycle()
         # duration = self._compute_cycle()
+
+        # TODO s'il y a le spread, il faut relancer le processus d'optimisation avec la contrainte
         self._compute_constraints(duration, args.type, args)
+
 
     def do_compute_rto_constraints(self, args):
         """
@@ -1404,8 +1450,15 @@ class MpTcpNumerics(cmd.Cmd):
         # sim.compute_required_buffer ()
         print("t=", problem_type)
         print(args)
-        ret = sim._solve_pb(problem_type, "toto", min_throughputs=args.sfmin)
+        ret = sim._solve_pb(problem_type, "toto", min_throughputs=args.sfmin, max_throughputs=args.sfmax)
+        pp = pprint.PrettyPrinter(indent=4)
         print("status=", ret["status"])
+        for name, value in ret["variables"].items():
+            print("Variable to optimize: ", name, "(", type(name), ") =", pu.value(value), "(", type(value), ")")
+        # print("Throughput")
+        pp.pprint(ret)
+        
+        # relaunch it 
         if args.spread:
             print("TODO")
 

@@ -14,7 +14,7 @@
 		{
 			"name": "slow",
 			"cwnd": 20,
-			"mss": 1500,
+			"mss": 1,
 			"var": 10,
 			"fowd": 20,
 			"bowd": 20,
@@ -24,7 +24,7 @@
 		{
 			"name": "fast",
 			"cwnd": 15,
-			"mss": 1500,
+			"mss": 1,
 			"var": 10,
 			"fowd": 10,
 			"bowd": 10,
