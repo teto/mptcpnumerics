@@ -149,6 +149,7 @@ class SolvingMode(Enum):
     """
     RcvBuffer = "buffer"
     OneWindow = "single_cwnd"
+    Cbr = "Constant Bit Rate"
     Cwnds = "cwnds"
 
 class MpTcpCapabilities(Enum):
@@ -260,7 +261,7 @@ def dss_size(ack: DssAck, mapping : DssMapping, with_checksum: bool=False) -> in
 # # name/value
 class HOLTypes(Enum):
     """
-    names inspired from  SCTP paper
+    names inspired from  SCTP paper, TODO name it
 
     """
     GapedAck = "GapAck-Induced Sender Buffer Blocking (GSB)"
@@ -299,7 +300,6 @@ class Event:
                 s=self,
                 dest="sender" if self.direction == Direction.Sender else "Receiver",
                 )
-
 
 class SenderEvent(Event):
     def __init__(self, sf_id ):
@@ -342,6 +342,7 @@ class MpTcpSubflow:
     """
     @author Matthieu Coudron
 
+    
     """
 
     # may change
@@ -356,6 +357,9 @@ class MpTcpSubflow:
         In this simulator, the cwnd is considered as constant, at its maximum.
         Hence the value given here will remain
         :param cwnd careful, there are 2 variables here, one symbolic, one a hard value
+        :param sp_cwnd symbolic congestion window
+        :param sp_mss symbolic Maximum Segment Size
+
         # :param contribution computed by receiver
         """
         # self.sender = sender
@@ -656,14 +660,12 @@ class MpTcpReceiver:
     def __init__(self, rcv_wnd, capabilities, config):
         """
         :param rcv_wnd
+        :
         """
         self.config = config
         # self.rcv_wnd_max = max_rcv_wnd
-        # self.j["receiver"]["rcv_buffer"]
         # rcv_left, rcv_wnd, rcv_max_wnd = sp.symbols("dsn_{rcv} w_{rcv} w^{max}_{rcv}")
-        self.subflows = {}
-        #self.rcv_wnd_max = sp.Symbol("W^{receiver}_{MAX}")
-# config["receiver"]["rcv_buffer"]
+        self.subflows = {} #: dictionary of dictionary subflows
         self.rcv_wnd_max = rcv_wnd
         self.wnd = self.rcv_wnd_max
         self.rcv_next = 0
@@ -957,9 +959,15 @@ class Simulator:
                 pb += sp_to_pulp(tab,self.receiver.subflows[sf_name]["rx_bytes"] )>= min_ratio * mptcp_throughput
 
             # subflow contribution should be no more than % of total
-            for sf_name, max_ratio in max_throughputs:
+            for sf_name, max_cwnd in args.cwnd_max:
+                print("name/max_cwnd", sf_name, max_cwnd)
+                pb += sp_to_pulp(tab,self.receiver.subflows[sf_name]["cwnd"] ) <= 
+
+            # subflow contribution should be no more than % of total
+            for sf_name, min_cwnd in cwnd_min:
                 print("name/ratio", sf_name, max_ratio)
                 pb += sp_to_pulp(tab,self.receiver.subflows[sf_name]["rx_bytes"] ) <= max_ratio * mptcp_throughput
+
 
         else:
             raise Exception("unsupported mode %r " % mode)
@@ -1297,10 +1305,25 @@ class MpTcpNumerics(cmd.Cmd):
 
         # parser.add_argument('--', action="append", default=[],
         subparsers = parser.add_subparsers(dest="type", title="Subparsers", )
-        sub_cwnd = subparsers.add_parser(SolvingMode.Cwnds.value, parents=[], 
-                help='Converts pcap to a csv file')
+
         sub_buf = subparsers.add_parser(SolvingMode.RcvBuffer.value, parents=[], 
-                help='Converts pcap to a csv file')
+                help=('Congestion windows are fixed, given by topology: gives the required buffered size to prevent head of line'
+                ' blocking depending on the scheduling')
+                )
+        # TODO add options to accomodate RTO 
+
+        sub_cwnd = subparsers.add_parser(SolvingMode.Cwnds.value, parents=[], 
+                help=('Buffer size is fixed: finds the cogestion window '
+                'combinations that give the best throughput'
+                'under the constraints chosen on cli and topology file'
+                ))
+    
+        # sub_cbr = subparsers.add_parser(SolvingMode.RcvBuffer.value, parents=[], 
+        #         help=('Gives the required buffered size to prevent head of line'
+        #              ' blocking depending on the scheduling')
+        #         )
+
+        # cela 
         sub_cwnd.add_argument('--sfmin', nargs=2, action="append", 
                 default=[],
                 metavar="<SF_NAME> <min contribution ratio>",
@@ -1313,19 +1336,41 @@ class MpTcpNumerics(cmd.Cmd):
                 help=("Use this to force a max amount of throughput (%) on a subflow"
                     "Expects 2 arguments: subflow name followed by its ratio (<1)")
                 )
-        sub_cwnd.add_argument('--cbr', nargs=2, action="append", 
+        sub_cwnd.add_argument('--sfmincwnd', nargs=2, action="append", 
+                default=[],
+                metavar="<SF_NAME> <min contribution ratio>",
+                help=("Use this to ensure a minimum congestion window on a subflow"
+                    "Expects 2 arguments: subflow name followed by its ratio (<1)")
+                )
+        sub_cwnd.add_argument('--sfmaxcwnd', nargs=2, action="append", 
                 default=[],
                 metavar="<SF_NAME> <max contribution %>",
+                help=("Use this to limit the congestion window of a subflow"
+                    "Expects 2 arguments: subflow name followed by its ratio (<1)")
+                )
+
+        sub_cwnd.add_argument('--nohol', nargs=2, action="append", 
+                default=[],
+                metavar="<PREVENT_HOL>",
                 help=("CBR: Constant Bit Rate: Tries to find a combination that minimizes"
                     "disruption of the throughput on a loss on a path, enabled when "
                     " reaching a threshold of X throughput")
                 )
 
+        sub_cwnd.add_argument('--cbr', action="store_true", 
+                default=[],
+                metavar="<CONSTANT_BIT_RATE>",
+                help=("CBR: Constant Bit Rate: Tries to find a combination that minimizes"
+                    "disruption of the throughput in case of a loss on a subflow"
+                    " (the considered cases are one loss per cycle on one subflow")
+                    " and this for every subflow.")
+                )
+
         # print( (SolvingMode.__members__.keys()))
         # parser.add_argument('type', choices=SolvingMode.__members__.keys(), help="Choose a solving mode")
-        sub_cwnd.add_argument('--spread', type=int, 
-                help=("Will try to spread the load while keeping the throughput within the imposed limits"
-                "compared to the optimal case "))
+        # sub_cwnd.add_argument('--spread', type=int, 
+        #         help=("Will try to spread the load while keeping the throughput within the imposed limits"
+        #         "compared to the optimal case "))
         # TODO pouvoir en mettre plusieurs
         # parser.add_argument('duration', choices=
 
@@ -1340,7 +1385,8 @@ class MpTcpNumerics(cmd.Cmd):
 
     def do_compute_rto_constraints(self, args):
         """
-        Find out the amount of buffer required
+        Find out the amount of buffer required, depends on the size of the cwnds
+
         """
         parser = argparse.ArgumentParser(description="hello world")
         # parser.add_argument('constraint', metavar="SUBFLOW ID", choices=constraint_types,
@@ -1450,7 +1496,11 @@ class MpTcpNumerics(cmd.Cmd):
         # sim.compute_required_buffer ()
         print("t=", problem_type)
         print(args)
-        ret = sim._solve_pb(problem_type, "toto", min_throughputs=args.sfmin, max_throughputs=args.sfmax)
+        ret = sim._solve_pb(problem_type, "toto", min_throughputs=args.sfmin, 
+                max_throughputs=args.sfmax
+                args
+                )
+
         pp = pprint.PrettyPrinter(indent=4)
         print("status=", ret["status"])
         for name, value in ret["variables"].items():
