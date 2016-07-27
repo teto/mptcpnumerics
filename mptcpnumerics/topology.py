@@ -4,12 +4,18 @@ geneerate mptcpsubflow on its own ?
 """
 import logging
 import pprint
+import json
 
 log = logging.getLogger(__name__)
 
 class MpTcpTopology:
     """
     subflow configuration
+
+    .. literalinclude:: /../examples/double.json
+    
+
+
     """
     def __init__(self):
         """
@@ -17,24 +23,32 @@ class MpTcpTopology:
         """
         pass
 
-    def load_topology(filename):
+    def load_topology(self,filename):
         """
+        Args:
+            :param filename
         """
 
         log.info("Loading topology from %s" % filename ) 
-        with open(filename) as f:
-            self.config = json.load(f)
+        with open(filename) as filename:
+            self.config = json.load(filename)
 
     @property
     def rcv_buf(self):
+        """
+        Returns
+        """
         return self.config["receiver"]["rcv_buffer"]
 
 
     @property
     def snd_buf(self):
+        """
+        :returns: Size of sender buffer (KB)
+        """
         return self.config["sender"]["rcv_buffer"]
 
-    def subflows():
+    def subflows(self):
         return self.subflows
 
     # def fowd(name):
@@ -54,9 +68,9 @@ class MpTcpTopology:
         pp = pprint.PrettyPrinter(indent=4)
         pp.pprint(self.config)
 
-            print("Number of subflows=%d" % len(j["subflows"]))
-            for s in j["subflows"]:
-                print("MSS=%d" % s["mss"])
-            print("toto")
+        print("Number of subflows=%d" % len(self.config["subflows"]))
+        # for s in j["subflows"]:
+        #     print("MSS=%d" % s["mss"])
+        print("toto")
 
 

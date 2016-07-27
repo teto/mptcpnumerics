@@ -359,6 +359,7 @@ class MpTcpSubflow:
         :param cwnd careful, there are 2 variables here, one symbolic, one a hard value
         :param sp_cwnd symbolic congestion window
         :param sp_mss symbolic Maximum Segment Size
+        :ivar 
 
         # :param contribution computed by receiver
         """
@@ -379,10 +380,7 @@ class MpTcpSubflow:
         print("%r"% self.sp_cwnd)
 
         self.name = name
-        # self.throughput = None
 
-        # self.una = 0
-        # TODO rename to 'inflight'
         self.inflight = False
         # unused for now
         self.svar = 10
@@ -822,6 +820,9 @@ class Simulator:
 
     Once the scenario, is correctly setup, call "run" and let the magic happens !
 
+    :ivar time_limit Ploppyboulba
+    :ivar receiver Ploppyboulba
+
     """
     current_time = 0
         # should be ordered according to time
@@ -830,14 +831,25 @@ class Simulator:
         """
         current_time is set to the time of the current event
         :param sender ok
+        Args:
+            Sender (MpTcpSender):  a sender
+
+        Returns:
+            bool: A bool
         """
         self.config = config
         self.sender = sender
+        """Sender MpTcpSender"""
         self.receiver = receiver
         # http://www.grantjenks.com/docs/sortedcontainers/sortedlistwithkey.html#id1
         self.events = sortedcontainers.SortedListWithKey(key=lambda x: x.time)
         self.time_limit = None
+        """Tells when the simulator should stop"""
+    
         self.current_time = 0
+        """
+        :ivar current_time this is a test
+        """
 
         # list of constraints that will represent the problem when simulation ends
         self.constraints =[]
@@ -959,9 +971,9 @@ class Simulator:
                 pb += sp_to_pulp(tab,self.receiver.subflows[sf_name]["rx_bytes"] )>= min_ratio * mptcp_throughput
 
             # subflow contribution should be no more than % of total
-            for sf_name, max_cwnd in args.cwnd_max:
-                print("name/max_cwnd", sf_name, max_cwnd)
-                pb += sp_to_pulp(tab,self.receiver.subflows[sf_name]["cwnd"] ) <= 
+            # for sf_name, max_cwnd in args.cwnd_max:
+            #     print("name/max_cwnd", sf_name, max_cwnd)
+            #     pb += sp_to_pulp(tab,self.receiver.subflows[sf_name]["cwnd"] ) <= 
 
             # subflow contribution should be no more than % of total
             for sf_name, min_cwnd in cwnd_min:
@@ -1362,7 +1374,7 @@ class MpTcpNumerics(cmd.Cmd):
                 metavar="<CONSTANT_BIT_RATE>",
                 help=("CBR: Constant Bit Rate: Tries to find a combination that minimizes"
                     "disruption of the throughput in case of a loss on a subflow"
-                    " (the considered cases are one loss per cycle on one subflow")
+                    " (the considered cases are one loss per cycle on one subflow"
                     " and this for every subflow.")
                 )
 
@@ -1497,8 +1509,8 @@ class MpTcpNumerics(cmd.Cmd):
         print("t=", problem_type)
         print(args)
         ret = sim._solve_pb(problem_type, "toto", min_throughputs=args.sfmin, 
-                max_throughputs=args.sfmax
-                args
+                max_throughputs=args.sfmax,
+                args=args,
                 )
 
         pp = pprint.PrettyPrinter(indent=4)
