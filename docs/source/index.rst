@@ -36,7 +36,9 @@ Contents:
 Modes
 -------
 You have different modes
-* Cwnds where it tries
+* Cwnds where it tries to optimize congestion window values depending on a set of constraints
+* Buffer where given a fixed topology/cwnd, the program can tell you how much buffer is required to 
+  run MPTCP at full speed
 
 
 .. Topology file
