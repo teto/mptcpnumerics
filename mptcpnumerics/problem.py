@@ -81,6 +81,8 @@ class MpTcpProblem(pu.LpProblem):
 
         """
         pulp_subflows  = {}
+        for sf in self.sender.subflows.values():
+            tab.update({sf.sp_mss.name: sf.mss})
 
         # STEP 1: maps sympy-to-pulp VARIABLES
         for sf in sender.subflows:
@@ -108,9 +110,14 @@ class MpTcpProblem(pu.LpProblem):
                 sp_to_pulp(sender.bytes_sent), \
                 sp_to_pulp(receiver.rx_bytes), \
 
-class ProblemOptimizeCwnd():
-    def __init__():
-        super().__init__(
-            "Subflow congestion windows repartition that maximizes goodput",
-            pu.LpMaximize
-        )
+class ProblemOptimizeCwnd(MpTcpProblem):
+    def __init__(self, buffer_size, name):
+        super().__init__(buffer_size, name, pu.LpMaximize, )
+
+
+
+class ProblemOptimizeBuffer(MpTcpProblem):
+    def __init__(self, name):
+        lp_rcv_wnd = pu.LpVariable(SymbolNames.ReceiverWindow.value, lowBound=0, cat=pu.LpInteger )
+        super().__init__(lp_rcv_wnd, name, pu.LpMinimize)
+            
