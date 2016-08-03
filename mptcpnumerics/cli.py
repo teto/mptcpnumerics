@@ -29,7 +29,7 @@ streamHandler = logging.StreamHandler()
 formatter = logging.Formatter('%(levelname)s - %(message)s')
 streamHandler.setFormatter(formatter)
 log.addHandler(streamHandler)
-fileHdl = logging.FileHandler("log",mode="w")
+fileHdl = logging.FileHandler("log", mode="w")
 fileHdl.setFormatter(formatter)
 log.addHandler(fileHdl)
 
@@ -57,24 +57,24 @@ class MpTcpNumerics(cmd.Cmd):
             # self.subflows = map( lambda x: MpTcpSubflow(), self.j["subflows"])
             self.subflows = {}
             for sf in self.j["subflows"]:
-                self.subflows.update( {sf["name"]:sf} )
+                self.subflows.update({sf["name"]: sf})
                 # print("toto")
         return self.j
 
     def do_print(self, args):
 
         print("Number of subflows=%d" % len(self.j["subflows"]))
-        for idx,s in enumerate(self.j["subflows"]):
+        for idx, s in enumerate(self.j["subflows"]):
             print(s)
             msg = "Sf {id} MSS={mss} RTO={rto} rtt={rtt}={fowd}+{bowd}".format(
                 # % (idx, s["mss"], rto(s["f"]+s["b"], s['var']))
                 id=idx,
-                rto=rto(s["fowd"] + s["bowd"], s["var"]),
+                # rto=rto(s["fowd"] + s["bowd"], s["var"]),
                 mss=s["mss"],
                 rtt=s["fowd"] + s["bowd"],
                 fowd=s["fowd"],
                 bowd=s["bowd"],
-                )
+            )
             print(msg)
             # TODO sy.add varying overhead
             # sy.add
@@ -115,7 +115,7 @@ class MpTcpNumerics(cmd.Cmd):
                 description=('Congestion windows are fixed, given by topology:'
                     'gives the required buffered size to prevent head of line'
                 ' blocking depending on the scheduling')
-                )
+            )
         # TODO add options to accomodate RTO 
         args = parser.parse_args(shlex.split(args))
 
@@ -181,14 +181,14 @@ class MpTcpNumerics(cmd.Cmd):
                     "")
                 )
 
-        sub_cwnd.add_argument('--cbr', action="store_true", 
-                default=[],
-                metavar="<CONSTANT_BIT_RATE>",
-                help=("CBR: Constant Bit Rate: Tries to find a combination that minimizes"
-                    "disruption of the throughput in case of a loss on a subflow"
-                    " (the considered cases are one loss per cycle on one subflow"
-                    " and this for every subflow.")
-                )
+        # sub_cwnd.add_argument('--cbr', action="store_true", 
+        #         default=[],
+        #         # metavar="CONSTANT_BIT_RATE",
+        #         help=("CBR: Constant Bit Rate: Tries to find a combination that minimizes"
+        #             "disruption of the throughput in case of a loss on a subflow"
+        #             " (the considered cases are one loss per cycle on one subflow"
+        #             " and this for every subflow.")
+        #         )
 
         # print( (SolvingMode.__members__.keys()))
         # parser.add_argument('type', choices=SolvingMode.__members__.keys(), help="Choose a solving mode")
@@ -251,7 +251,7 @@ class MpTcpNumerics(cmd.Cmd):
         # subflow contribution should be no more than % of total
         for sf_name, min_cwnd in cwnd_min:
             print("name/ratio", sf_name, max_ratio)
-            pb += sp_to_pulp(tab,self.receiver.subflows[sf_name]["rx_bytes"] ) <= max_ratio * mptcp_throughput
+            pb += sp_to_pulp(tab, self.receiver.subflows[sf_name]["rx_bytes"] ) <= max_ratio * mptcp_throughput
 
 
         constraints = self.sender.constraints
@@ -347,20 +347,27 @@ class MpTcpNumerics(cmd.Cmd):
         Returns:
             Simulator
         """
-        for sf_dict in config["subflows"]:
+        for sf_dict in self.j["subflows"]:
             print("test", sf_dict)
             # self.sp_cwnd = sp.IndexedBase("cwnd_{name}")
             # upper_bound = min(self.snd_buf_max, self.rcv_wnd)
-            upper_bound = self.rcv_wnd
             # cwnd has to be <= min(rcv_buf, snd_buff) TODO add
+            # upper_bound = self.rcv_wnd
+            # subflow = MpTcpSubflow( upper_bound=upper_bound, **sf_dict)
+            subflow = topology.MpTcpSubflow(
+                    upper_bound=upper_bound,
+                    **sf_dict
+                    )
 
-            subflow = MpTcpSubflow( upper_bound=upper_bound, **sf_dict)
             self.subflows.update( {sf_dict["name"]: subflow} )
             # sort them by subflow
             # sp.Symbol()
 
         capabilities = self.j["capabilities"]
-        rcv_wnd = sp.Symbol(SymbolNames.ReceiverWindow.value, positive=True)
+
+        # TODO pass as an argument ?
+        sym_rcv_wnd = sp.Symbol(SymbolNames.ReceiverWindow.value, positive=True)
+
         receiver = MpTcpReceiver(rcv_wnd, capabilities, self.j)
         sender = MpTcpSender(rcv_wnd, self.j, None)
 

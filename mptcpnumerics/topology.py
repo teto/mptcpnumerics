@@ -8,6 +8,146 @@ import json
 
 log = logging.getLogger(__name__)
 
+
+
+class MpTcpSubflow:
+    """
+    @author Matthieu Coudron
+
+    
+    """
+
+    # may change
+    # should be sympy symbols ?
+    # fixed values
+    def __init__(self, upper_bound,  name,
+            mss, fowd, bowd, loss, var, cwnd,
+            # hardcoded_values,
+            **extra
+            ):
+        """
+        In this simulator, the cwnd is considered as constant, at its maximum.
+        Hence the value given here will remain
+        :param cwnd careful, there are 2 variables here, one symbolic, one a hard value
+        :param sp_cwnd symbolic congestion window
+        :param sp_mss symbolic Maximum Segment Size
+        :ivar 
+
+        # :param contribution computed by receiver
+        """
+        # self.sender = sender
+            # loaded_cwnd = sf_dict.get("cwnd", self.rcv_wnd)
+        # FREE
+        # upper_bound = min( upper_bound, cwnd ) if cwnd else upper_bound
+        # cwnd = pu.LpVariable (name, 0, upper_bound)
+        # self.cwnd = cwnd
+        self.cwnd_from_file = cwnd
+        self.sp_cwnd = sp.Symbol( gen_cwnd_name(name), positive=True)
+        # provide an upperbound to sympy so that it can deduce out of order packets etc...
+        sp.refine(self.sp_cwnd, sp.Q.positive(upper_bound - self.sp_cwnd))
+
+        self.sp_mss = sp.Symbol( gen_mss_name(name) % name, positive=True)
+        """ Symbolic Maximum Segment Size """
+        self.mss = mss
+        """Integer value """
+        self.sp_tx = 0
+        """Sent bytes"""
+        self.sp_rx = 0
+        """Received bytes"""
+
+        # self.mss = mss
+        print("%r"% self.sp_cwnd)
+
+        self.name = name
+        """Identifier of the subflow"""
+
+        self.inflight = False
+        """
+        This is a pretty crude simulator: it considers that all packets are sent 
+        at once, hence this boolean tells if the window is inflight
+        """
+
+        # unused for now
+        self.svar = 10
+        """Smoothed variance"""
+
+        # forward and Backward one way delays
+        self.fowd = fowd
+        """Forward One Way Delay (OWD)"""
+        self.bowd = bowd
+        """Backward One Way Delay (OWD)"""
+
+        self.loss_rate = loss
+        """Unused"""
+
+
+    def __str__(self):
+        """
+        """
+        return "Id={s.name} Rtt={s.fowd}+{s.bowd} inflight={s.outstanding}".format(
+                s=self
+                )
+
+    def busy(self) -> bool:
+        """
+        true if a window of packet is in flight
+        """
+        return self.inflight
+
+
+    def rto(self):
+        """
+        Retransmit Timeout
+        """
+        return rto (self.rtt, self.svar)
+
+    def rtt(self):
+        """
+        Returns constant Round Trip Time
+        """
+        return self.fowd + self.bowd
+
+    # def right_edge(self):
+    #     return self.una + self.sp_cwnd
+
+    def increase_window(self):
+        """
+        Do nothing for now or uncoupled
+        """
+        # self.sp_cwnd += MSS
+        pass
+
+    def ack_window(self):
+        """
+
+        """
+        # self.una += self.sp_cwnd
+        assert self.busy() == True
+        self.increase_window()
+        self.inflight = False
+
+
+    def generate_pkt(self, dsn, ):
+        """
+        Generates a packet with a full cwnd
+        """
+        assert self.inflight == False
+
+        e = SenderEvent(self.name)
+        e.delay = self.fowd
+        # e.subflow_id = self.name
+        e.dsn  = dsn
+        e.size = self.sp_cwnd * self.sp_mss
+
+        print("packet size %r"% e.size)
+
+        # a
+        # self.una = dsn
+        self.inflight = True
+        return e
+
+
+
 class MpTcpTopology:
     """
     subflow configuration
