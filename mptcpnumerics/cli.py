@@ -21,6 +21,7 @@ import pprint
 import shlex
 from . import topology
 from . import problem
+from . import SymbolNames, Simulator
 
 log = logging.getLogger("mptcpnumerics")
 log.setLevel(logging.DEBUG)
@@ -109,22 +110,23 @@ class MpTcpNumerics(cmd.Cmd):
     def do_optbuffer(self, args):
         """
         One of the main user function
+        WIP
         """
 
         parser = argparse.ArgumentParser(
-                description=('Congestion windows are fixed, given by topology:'
-                    'gives the required buffered size to prevent head of line'
+            description=('Congestion windows are fixed, given by topology:'
+                'gives the required buffered size to prevent head of line'
                 ' blocking depending on the scheduling')
-            )
+        )
         # TODO add options to accomodate RTO 
         args = parser.parse_args(shlex.split(args))
 
 
         pb = problem.MpTcpProblem("Finding minimum required buffer size", pu.LpMinimize)
-        pb += lp_rcv_wnd, "Buffer size"
-        tab[SymbolNames.ReceiverWindow.value] = lp_rcv_wnd
-        for sf in self.sender.subflows.values():
-            tab.update({sf.sp_cwnd.name: sf.cwnd_from_file})
+        # pb += lp_rcv_wnd, "Buffer size"
+        # tab[SymbolNames.ReceiverWindow.value] = lp_rcv_wnd
+        # for sf in self.sender.subflows.values():
+        #     tab.update({sf.sp_cwnd.name: sf.cwnd_from_file})
 
         # en fait ca c faut on peut avoir des cwnd , c juste le inflight qui doit pas depasser
         # pb +=  sum(cwnds) <= lp_rcv_wnd
@@ -137,10 +139,11 @@ class MpTcpNumerics(cmd.Cmd):
         """
 
         sub_cwnd = argparse.ArgumentParser(
-                description=('Buffer size is fixed: finds the cogestion window '
-                'combinations that give the best throughput'
-                'under the constraints chosen on cli and topology file'
-                ))
+            description=('Buffer size is fixed: finds the cogestion window '
+            'combinations that give the best throughput'
+            'under the constraints chosen on cli and topology file'
+            )
+        )
     
         # sub_cbr = subparsers.add_parser(SolvingMode.RcvBuffer.value, parents=[], 
         #         help=('Gives the required buffered size to prevent head of line'
@@ -149,37 +152,37 @@ class MpTcpNumerics(cmd.Cmd):
 
         # cela 
         sub_cwnd.add_argument('--sfmin', nargs=2, action="append", 
-                default=[],
-                metavar="<SF_NAME> <min contribution ratio>",
-                help=("Use this to force a minimum amount of throughput (%) on a subflow"
-                    "Expects 2 arguments: subflow name followed by its ratio (<1)")
-                )
+            default=[],
+            metavar="<SF_NAME> <min contribution ratio>",
+            help=("Use this to force a minimum amount of throughput (%) on a subflow"
+                "Expects 2 arguments: subflow name followed by its ratio (<1)")
+        )
         sub_cwnd.add_argument('--sfmax', nargs=2, action="append", 
-                default=[],
-                metavar="<SF_NAME> <max contribution %>",
-                help=("Use this to force a max amount of throughput (%) on a subflow"
-                    "Expects 2 arguments: subflow name followed by its ratio (<1)")
-                )
+            default=[],
+            metavar="<SF_NAME> <max contribution %>",
+            help=("Use this to force a max amount of throughput (%) on a subflow"
+                "Expects 2 arguments: subflow name followed by its ratio (<1)")
+        )
         sub_cwnd.add_argument('--sfmincwnd', nargs=2, action="append", 
-                default=[],
-                metavar="<SF_NAME> <min contribution ratio>",
-                help=("Use this to ensure a minimum congestion window on a subflow"
-                    "Expects 2 arguments: subflow name followed by its ratio (<1)")
-                )
+            default=[],
+            metavar="<SF_NAME> <min contribution ratio>",
+            help=("Use this to ensure a minimum congestion window on a subflow"
+                "Expects 2 arguments: subflow name followed by its ratio (<1)")
+        )
         sub_cwnd.add_argument('--sfmaxcwnd', nargs=2, action="append", 
-                default=[],
-                metavar="<SF_NAME> <max contribution %>",
-                help=("Use this to limit the congestion window of a subflow"
-                    "Expects 2 arguments: subflow name followed by its ratio (<1)")
-                )
+            default=[],
+            metavar="<SF_NAME> <max contribution %>",
+            help=("Use this to limit the congestion window of a subflow"
+                "Expects 2 arguments: subflow name followed by its ratio (<1)")
+        )
 
         sub_cwnd.add_argument('--nohol', nargs=1, action="append", 
-                default=[],
-                metavar="SUBFLOW",
-                help=("Find a combination of congestion windows that can withstand "
-                    " (continue to transmit) even under the worst RTO possible"
-                    "")
-                )
+            default=[],
+            metavar="SUBFLOW",
+            help=("Find a combination of congestion windows that can withstand "
+                " (continue to transmit) even under the worst RTO possible"
+                "")
+        )
 
         # sub_cwnd.add_argument('--cbr', action="store_true", 
         #         default=[],
@@ -334,10 +337,10 @@ class MpTcpNumerics(cmd.Cmd):
 
 
     def _run_cycle(self, 
-            # sender, receiver, 
-            duration,
-            fainting_subflow=None,
-            ):
+        # sender, receiver, 
+        duration,
+        fainting_subflow=None,
+        ):
         """
         Creates a sender and a receiver (from a topology file ?)
 
@@ -347,6 +350,8 @@ class MpTcpNumerics(cmd.Cmd):
         Returns:
             Simulator
         """
+
+        # 
         for sf_dict in self.j["subflows"]:
             print("test", sf_dict)
             # self.sp_cwnd = sp.IndexedBase("cwnd_{name}")
@@ -355,13 +360,11 @@ class MpTcpNumerics(cmd.Cmd):
             # upper_bound = self.rcv_wnd
             # subflow = MpTcpSubflow( upper_bound=upper_bound, **sf_dict)
             subflow = topology.MpTcpSubflow(
-                    upper_bound=upper_bound,
-                    **sf_dict
-                    )
+                # upper_bound=upper_bound,
+                **sf_dict
+            )
 
-            self.subflows.update( {sf_dict["name"]: subflow} )
-            # sort them by subflow
-            # sp.Symbol()
+            self.subflows.update({sf_dict["name"]: subflow})
 
         capabilities = self.j["capabilities"]
 
@@ -522,6 +525,7 @@ class MpTcpNumerics(cmd.Cmd):
         # there should be only total_bytes free
         sp.plotting.plot(var_oh_numeric)
 
+
 def run():
     parser = argparse.ArgumentParser(
         description='Generate MPTCP stats & plots'
@@ -529,21 +533,27 @@ def run():
 
     #  todo make it optional
     parser.add_argument("input_file", action="store",
-            help="Either a pcap or a csv file (in good format)."
-            "When a pcap is passed, mptcpanalyzer will look for a its cached csv."
-            "If it can't find one (or with the flag --regen), it will generate a "
-            "csv from the pcap with the external tshark program."
-            )
-    parser.add_argument("--debug", "-d", action="store_true",
+        help="Either a pcap or a csv file (in good format)."
+        "When a pcap is passed, mptcpanalyzer will look for a its cached csv."
+        "If it can't find one (or with the flag --regen), it will generate a "
+        "csv from the pcap with the external tshark program."
+    )
+    parser.add_argument("--debug", "-d", action="count", default=0,
             help="To output debug information")
     parser.add_argument("--batch", "-b", action="store", type=argparse.FileType('r'),
-            default=sys.stdin,
-            help="Accepts a filename as argument from which commands will be loaded."
-            "Commands follow the same syntax as in the interpreter"
-            )
+        default=sys.stdin,
+        help="Accepts a filename as argument from which commands will be loaded."
+        "Commands follow the same syntax as in the interpreter"
+    )
     # parser.add_argument("--command", "-c", action="store", type=str, nargs="*", help="Accepts a filename as argument from which commands will be loaded")
 
     args, unknown_args = parser.parse_known_args(sys.argv[1:])
+
+    # logging.CRITICAL = 50
+    level = logging.CRITICAL - args.debug * 10
+    log.setLevel(level)
+    print("Log level set to %s " % logging.getLevelName(level))
+
     analyzer = MpTcpNumerics()
     analyzer.do_load(args.input_file)
     if unknown_args:

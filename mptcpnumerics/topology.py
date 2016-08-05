@@ -1,13 +1,14 @@
-#!/usr/bin/env python3.5
+#!/usr/bin/env python3
 """
 geneerate mptcpsubflow on its own ?
 """
 import logging
 import pprint
 import json
+import sympy as sp
+from . import generate_cwnd_name, generate_mss_name
 
 log = logging.getLogger(__name__)
-
 
 
 class MpTcpSubflow:
@@ -17,14 +18,13 @@ class MpTcpSubflow:
     
     """
 
-    # may change
-    # should be sympy symbols ?
-    # fixed values
-    def __init__(self, upper_bound,  name,
-            mss, fowd, bowd, loss, var, cwnd,
-            # hardcoded_values,
-            **extra
-            ):
+    def __init__(self, 
+# upper_bound,  
+        name,
+        mss, fowd, bowd, loss, var, cwnd,
+        # hardcoded_values,
+        **extra
+    ):
         """
         In this simulator, the cwnd is considered as constant, at its maximum.
         Hence the value given here will remain
@@ -42,11 +42,13 @@ class MpTcpSubflow:
         # cwnd = pu.LpVariable (name, 0, upper_bound)
         # self.cwnd = cwnd
         self.cwnd_from_file = cwnd
-        self.sp_cwnd = sp.Symbol( gen_cwnd_name(name), positive=True)
-        # provide an upperbound to sympy so that it can deduce out of order packets etc...
-        sp.refine(self.sp_cwnd, sp.Q.positive(upper_bound - self.sp_cwnd))
+        self.sp_cwnd = sp.Symbol(generate_cwnd_name(name), positive=True)
 
-        self.sp_mss = sp.Symbol( gen_mss_name(name) % name, positive=True)
+        # provide an upperbound to sympy so that it can deduce out of order packets etc...
+        # TODO according to SO, it should work without that :/
+        # sp.refine(self.sp_cwnd, sp.Q.positive(upper_bound - self.sp_cwnd))
+
+        self.sp_mss = sp.Symbol(generate_mss_name(name), positive=True)
         """ Symbolic Maximum Segment Size """
         self.mss = mss
         """Integer value """
@@ -56,7 +58,7 @@ class MpTcpSubflow:
         """Received bytes"""
 
         # self.mss = mss
-        print("%r"% self.sp_cwnd)
+        print("%r" % self.sp_cwnd)
 
         self.name = name
         """Identifier of the subflow"""

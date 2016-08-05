@@ -135,9 +135,6 @@ def froze_it(cls):
     return cls
 
 
-def rto(rtt, svar):
-    return rtt + 4* svar
-
 class SolvingMode(Enum):
     """
     RcvBuffer: gives the required buffer size depending on scheduling
@@ -153,12 +150,13 @@ class SolvingMode(Enum):
     Cbr = "Constant Bit Rate"
     Cwnds = "cwnds"
 
+
 class MpTcpCapabilities(Enum):
     """
     string value should be the one found in json's "capabilities" section
     """
     NRSACK = "Non renegotiable ack"
-    DAckReplication =   "DAckReplication"
+    DAckReplication = "DAckReplication"
     OpportunisticRetransmission = "Opportunistic retransmissions"
 
 
@@ -180,10 +178,12 @@ class OptionSize(IntEnum):
     # 3 + n * 1 ?
     # RmAddr
 
+
 class DssAck(IntEnum):
     NoAck = 0
     SimpleAck = 4
     ExtendedAck = 8
+
 
 class DssMapping(IntEnum):
     NoDss = 4
@@ -194,6 +194,7 @@ class DssMapping(IntEnum):
 
 def dss_size(ack: DssAck, mapping : DssMapping, with_checksum: bool=False) -> int:
     """
+    Computes the size of a dss depending on the flags
     """
     size = 4
     size += ack.value
@@ -273,11 +274,6 @@ class HOLTypes(Enum):
     # Transmission-Induced Sender Buffer Blocking (TSB)
 
 
-
-"""
-"""
-# Event = collections.namedtuple('Event', ['time', 'subflow', 'direction', 'dsn', 'size', 'blocks'])
-
 class Event:
     """
     Describe an event in simulator.
@@ -299,12 +295,13 @@ class Event:
 
     def __str__(self):
         return "Scheduled at {s.time} dest={dest}".format(
-                s=self,
-                dest="sender" if self.direction == Direction.Sender else "Receiver",
-                )
+            s=self,
+            dest="sender" if self.direction == Direction.Sender else "Receiver",
+        )
+
 
 class SenderEvent(Event):
-    def __init__(self, sf_id ):
+    def __init__(self, sf_id):
         """
         :param dsn in bytes
         :param size in bytes
@@ -315,8 +312,7 @@ class SenderEvent(Event):
 
     def __str__(self):
         res = super().__str__()
-        res += " dsn={s.dsn} size={s.size}".format(
-                s=self)
+        res += " dsn={s.dsn} size={s.size}".format( s=self)
         return res
 
 # @froze_it
