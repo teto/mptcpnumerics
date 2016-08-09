@@ -20,8 +20,9 @@ import pulp as pu
 import pprint
 import shlex
 from . import topology
+from .analysis import MpTcpReceiver, MpTcpSender
 from . import problem
-from . import SymbolNames, Simulator
+from .analysis import SymbolNames, Simulator
 
 log = logging.getLogger("mptcpnumerics")
 log.setLevel(logging.DEBUG)
@@ -206,12 +207,15 @@ class MpTcpNumerics(cmd.Cmd):
         duration = self._compute_cycle_duration()
         
         # TODO run simulation with args
-        self._run_cycle(duration)
+        simulator = self._run_cycle(duration)
 
         # duration = self._compute_cycle()
         # TODO s'il y a le spread, il faut relancer le processus d'optimisation avec la contrainte
         # self.config
-        pb = problem.ProblemOptimizeCwnd( "Subflow congestion windows repartition that maximizes goodput", )
+        pb = problem.ProblemOptimizeCwnd( 
+                self.j["receiver"]["rcv_buffer"], # size of the 
+                "Subflow congestion windows repartition that maximizes goodput", )
+
         pb.generate_pulp_variables()
 
         # does it make sense to use Elastic Constraints ? that could help solve
@@ -371,8 +375,8 @@ class MpTcpNumerics(cmd.Cmd):
         # TODO pass as an argument ?
         sym_rcv_wnd = sp.Symbol(SymbolNames.ReceiverWindow.value, positive=True)
 
-        receiver = MpTcpReceiver(rcv_wnd, capabilities, self.j)
-        sender = MpTcpSender(rcv_wnd, self.j, None)
+        receiver = MpTcpReceiver(sym_rcv_wnd, capabilities, self.j, self.subflows)
+        sender = MpTcpSender(sym_rcv_wnd, self.j, None)
 
         sim = Simulator(self.j, sender, receiver)
 
