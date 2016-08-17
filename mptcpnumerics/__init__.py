@@ -1,5 +1,8 @@
 #!/bin/env python3
+from enum import Enum
 
+class SymbolNames(Enum):
+    ReceiverWindow = "rcv_wnd"
 
 # to have a common convention between 
 def generate_mss_name(name):

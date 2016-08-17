@@ -1,6 +1,6 @@
 import pulp as pu
 import sympy as sp
-from .analysis import SymbolNames
+from . import SymbolNames
 
 
 
