@@ -73,8 +73,8 @@ constraint_types = [
 PerSubflowResult = namedtuple('PerSubflowResult', ["cwnd", "throughput", "ratio"])
 
 
-class SymbolNames(Enum):
-    ReceiverWindow = "rcv_wnd"
+# class SymbolNames(Enum):
+#     ReceiverWindow = "rcv_wnd"
 
 # print("coef ", var,  " ", coef)
 def dump_translation_dict(d):
@@ -697,7 +697,6 @@ class Simulator:
     :ivar receiver Ploppyboulba
 
     """
-    current_time = 0
         # should be ordered according to time
         # events = []
     def __init__(self, config, sender : MpTcpSender, receiver : MpTcpReceiver):

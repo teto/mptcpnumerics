@@ -20,9 +20,9 @@ import pulp as pu
 import pprint
 import shlex
 from . import topology
-from .analysis import MpTcpReceiver, MpTcpSender
+from .analysis import MpTcpReceiver, MpTcpSender, Simulator
 from . import problem
-from .analysis import SymbolNames, Simulator
+from . import SymbolNames
 
 log = logging.getLogger("mptcpnumerics")
 log.setLevel(logging.DEBUG)
@@ -207,7 +207,7 @@ class MpTcpNumerics(cmd.Cmd):
         duration = self._compute_cycle_duration()
         
         # TODO run simulation with args
-        simulator = self._run_cycle(duration)
+        sim = self._run_cycle(duration)
 
         # duration = self._compute_cycle()
         # TODO s'il y a le spread, il faut relancer le processus d'optimisation avec la contrainte
@@ -216,7 +216,10 @@ class MpTcpNumerics(cmd.Cmd):
                 self.j["receiver"]["rcv_buffer"], # size of the 
                 "Subflow congestion windows repartition that maximizes goodput", )
 
-        pb.generate_pulp_variables()
+        pb.generate_pulp_variables(sim.sender.subflows)
+        res = pb.map_sp_to_pulp_variables(sim.sender, sim.receiver)
+        print("RES=\n",res)
+        lp_tx, lp_rx, lp_subflows = res
 
         # does it make sense to use Elastic Constraints ? that could help solve
         # impossible cases
@@ -239,16 +242,13 @@ class MpTcpNumerics(cmd.Cmd):
         #         })
 
         # bytes_sent is easy, it's like the last dsn
-        # TODO could be replaced with self.receiver.rcv_next
-        mptcp_throughput = sp_to_pulp(tab, self.sender.bytes_sent)
-        # print( type(res), res)
+        mptcp_throughput = lp_tx
         pb.setObjective(mptcp_throughput)
-        # add sfmin arguments
 
         # ensure that subflow contribution is  at least % of total 
         for sf_name, min_ratio in min_throughputs:
             print("name/ratio", sf_name, min_ratio)
-            pb += sp_to_pulp(tab,self.receiver.subflows[sf_name]["rx_bytes"] )>= min_ratio * mptcp_throughput
+            pb += lp_subflows[sf_name]["rx_bytes"] >= min_ratio * mptcp_throughput
 
         # subflow contribution should be no more than % of total
         # for sf_name, max_cwnd in args.cwnd_max:
@@ -399,12 +399,13 @@ class MpTcpNumerics(cmd.Cmd):
             #     continue
             if sf == fainting_subflow:
                 log.debug("Mimicking an RTO => Needs to drop this pkt")
-                sim.stop ( fainting_subflow.rto() )
+                sim.stop (fainting_subflow.rto())
                 continue
             sim.add(pkt)
 
         sim.stop(duration)
         sim.run()
+        print("SIMULATOR=", sim)
         return sim
 
 

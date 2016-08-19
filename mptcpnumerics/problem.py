@@ -28,7 +28,7 @@ class MpTcpProblem(pu.LpProblem):
 
         Should depend of the mode ? for the receiver window ?
         """
-# todo use external naming function ?
+        # generate subflow specific variables
         for sf in subflows.values():
             name = sf.sp_cwnd.name
             # TODO set upBound later ? as a constraint 
@@ -71,8 +71,8 @@ class MpTcpProblem(pu.LpProblem):
             size of the buffer
         """
         pulp_subflows  = {}
-        for sf in self.sender.subflows.values():
-            tab.update({sf.sp_mss.name: sf.mss})
+        # for sf in self.sender.subflows.values():
+        #     tab.update({sf.sp_mss.name: sf.mss})
 
         # STEP 1: maps sympy-to-pulp VARIABLES
         for sf in sender.subflows:
@@ -96,9 +96,10 @@ class MpTcpProblem(pu.LpProblem):
 
         # "rx_bytes": sp_to_pulp(sf.sp_rx),
         # "tx_bytes": sp_to_pulp(sf.sp_rx)
-        return \
-                sp_to_pulp(sender.bytes_sent), \
-                sp_to_pulp(receiver.rx_bytes), \
+        return (
+                self.sp_to_pulp(sender.bytes_sent),
+                self.sp_to_pulp(receiver.rx_bytes),
+                pulp_subflows)
 
 class ProblemOptimizeCwnd(MpTcpProblem):
     def __init__(self, buffer_size, name):

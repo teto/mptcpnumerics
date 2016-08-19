@@ -7,6 +7,6 @@ class Scheduler:
 
 class GreedyScheduler(Scheduler):
     def __init__(self):
+        pass
         #
 
-    def send():

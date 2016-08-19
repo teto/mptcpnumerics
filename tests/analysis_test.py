@@ -2,7 +2,7 @@
 from unittest import TestCase
 import unittest
 
-import mptcpnumerics.analysis as ma
+import mptcpnumerics.cli as ma
 
 
 # compute_required_buffer é
@@ -25,17 +25,17 @@ class TestAnalysis(TestCase):
         # - with a list of commands passed via stdin
         # without constraints there should be a prevalent one
         j = self.m.do_load("examples/double.json")
-        self.m.do_compute_constraints() 
+        # self.m.do_compute_constraints() 
 
-g    def test_batch(self):
+    def test_batch(self):
         # Test the --batch flag
         # subprocess.Popen()
         pass 
 
-    def test_load(self):
-        # to test for errors
-        # with self.assertRaises(ValueError):
-        self.m.do_load("examples/topology.json")
+    # def test_load(self):
+    #     # to test for errors
+    #     # with self.assertRaises(ValueError):
+    #     self.m.do_load("examples/double.json")
 
 
     @unittest.skip("Module not mature yet")
