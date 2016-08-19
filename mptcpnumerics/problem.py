@@ -1,8 +1,9 @@
 import pulp as pu
 import sympy as sp
+import logging
 from . import SymbolNames
 
-
+log = logging.getLogger(__name__)
 
 
 
@@ -49,6 +50,10 @@ class MpTcpProblem(pu.LpProblem):
         :expr sympy expression
         :returns a pulp expression
         """
+        if not isinstance(expr, sp.Symbol):
+            log.warning("%s not a symbol", expr)
+            return expr
+        
         f = sp.lambdify( expr.free_symbols, expr)
 # translation_dict
         # TODO test with pb.variablesDict()["cwnd_{%s}" % sf_name])    

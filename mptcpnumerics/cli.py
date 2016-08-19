@@ -556,8 +556,8 @@ def run():
 
     # logging.CRITICAL = 50
     level = logging.CRITICAL - args.debug * 10
-    log.setLevel(level)
-    print("Log level set to %s " % logging.getLevelName(level))
+    # log.setLevel(level)
+    # print("Log level set to %s " % logging.getLevelName(level))
 
     analyzer = MpTcpNumerics()
     analyzer.do_load(args.input_file)

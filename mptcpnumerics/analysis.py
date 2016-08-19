@@ -540,22 +540,37 @@ class MpTcpReceiver:
         self.config = config
         # self.rcv_wnd_max = max_rcv_wnd
         # rcv_left, rcv_wnd, rcv_max_wnd = sp.symbols("dsn_{rcv} w_{rcv} w^{max}_{rcv}")
-        self.subflows = {} #: dictionary of dictionary subflows
+        # self.subflows = {} #: dictionary of dictionary subflows
         self.rcv_wnd_max = rcv_wnd
         self.wnd = self.rcv_wnd_max
-        self.rcv_next = 0
+        """Available window"""
+        self._rcv_next = 0
         # a list of tuples (headSeq, endSeq)
         self.out_of_order = []
-        self.subflows = subflows
+        """List of out of order blocks"""
+        self._subflows = subflows
+        """ Dictionary of subflows """
 
+    @property
+    def rcv_next(self):
+
+    @rcv_next.setter
+    def rcv_next(self, val):
+
+            log.debug("Changing rcv_next to %s", value)
+        self._rcv_next = val
+
+    @property
+    def subflows(self):
+        return self._subflows)
     # def inflight(self):
     #     raise Exception("TODO")
     #     # return map(self.subflows)
     #     pass
-    def __setattr__(self, name, value):
-        if name == "rcv_next":
-            log.debug("Changing rcv_next to %s", value)
-        self.__dict__[name] = value
+    # def __setattr__(self, name, value):
+# # TODO set it as a property instead
+    #     if name == "rcv_next":
+    #     self.__dict__[name] = value
 
     # rename to advertised_window()
     def window_to_advertise(self):
