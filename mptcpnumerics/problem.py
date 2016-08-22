@@ -50,6 +50,7 @@ class MpTcpProblem(pu.LpProblem):
         :expr sympy expression
         :returns a pulp expression
         """
+
         if not isinstance(expr, sp.Symbol):
             log.warning("%s not a symbol", expr)
             return expr
@@ -58,7 +59,9 @@ class MpTcpProblem(pu.LpProblem):
 # translation_dict
         # TODO test with pb.variablesDict()["cwnd_{%s}" % sf_name])    
         translation_dict = self.variablesDict()
+
         # TODO pass another function to handle the case where symbols are actual values ?
+        print("free_symbols", expr.free_symbols)
         values = map( lambda x: translation_dict[x.name], expr.free_symbols)
         return f(*values)
 
@@ -80,10 +83,10 @@ class MpTcpProblem(pu.LpProblem):
         #     tab.update({sf.sp_mss.name: sf.mss})
 
         # STEP 1: maps sympy-to-pulp VARIABLES
-        for sf in sender.subflows:
+        for name, sf in sender.subflows.items():
             pulp_subflows.update(
                     {
-                        sf.name: {
+                        name: {
                             "cwnd":  self.sp_to_pulp(sf.sp_cwnd),
                             "mss":  self.sp_to_pulp(sf.sp_mss) 
                             }
@@ -92,7 +95,7 @@ class MpTcpProblem(pu.LpProblem):
 
             # STEP 2: convert sympy EXPRESSIONS into pulp ones
         for sf in sender.subflows:
-            pulp_subflows[sf.name].update(
+            pulp_subflows[name].update(
                     {
                         "rx":  self.sp_to_pulp(sf.sp_rx),
                         "tx":  self.sp_to_pulp(sf.sp_tx) 
@@ -103,7 +106,7 @@ class MpTcpProblem(pu.LpProblem):
         # "tx_bytes": sp_to_pulp(sf.sp_rx)
         return (
                 self.sp_to_pulp(sender.bytes_sent),
-                self.sp_to_pulp(receiver.rx_bytes),
+                # self.sp_to_pulp(receiver.rx_bytes),
                 pulp_subflows)
 
 class ProblemOptimizeCwnd(MpTcpProblem):

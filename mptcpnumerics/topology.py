@@ -7,6 +7,7 @@ import pprint
 import json
 import sympy as sp
 from . import generate_cwnd_name, generate_mss_name
+from .analysis import *
 
 log = logging.getLogger(__name__)
 
@@ -53,9 +54,9 @@ class MpTcpSubflow:
         self.mss = mss
         """Integer value """
         self.sp_tx = 0
-        """Sent bytes"""
-        self.sp_rx = 0
-        """Received bytes"""
+        """(Symbolic) Sent bytes"""
+        self.rx_bytes = 0
+        """(Symbolic) Received bytes"""
 
         # self.mss = mss
         print("%r" % self.sp_cwnd)

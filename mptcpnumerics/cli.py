@@ -57,10 +57,10 @@ class MpTcpNumerics(cmd.Cmd):
             print("Total of Cwnd=", total)
             # self.sender =
             # self.subflows = map( lambda x: MpTcpSubflow(), self.j["subflows"])
-            self.subflows = {}
-            for sf in self.j["subflows"]:
-                self.subflows.update({sf["name"]: sf})
-                # print("toto")
+            # self.subflows = {}
+            # for sf in self.j["subflows"]:
+            #     self.subflows.update({sf["name"]: sf})
+            #     # print("toto")
         return self.j
 
     def do_print(self, args):
@@ -219,7 +219,7 @@ class MpTcpNumerics(cmd.Cmd):
         pb.generate_pulp_variables(sim.sender.subflows)
         res = pb.map_sp_to_pulp_variables(sim.sender, sim.receiver)
         print("RES=\n",res)
-        lp_tx, lp_rx, lp_subflows = res
+        lp_tx, lp_subflows = res
 
         # does it make sense to use Elastic Constraints ? that could help solve
         # impossible cases
@@ -243,6 +243,7 @@ class MpTcpNumerics(cmd.Cmd):
 
         # bytes_sent is easy, it's like the last dsn
         mptcp_throughput = lp_tx
+        print("mptcp_throughput",  mptcp_throughput)
         pb.setObjective(mptcp_throughput)
 
         # ensure that subflow contribution is  at least % of total 
@@ -355,7 +356,9 @@ class MpTcpNumerics(cmd.Cmd):
             Simulator
         """
 
-        # 
+        subflows = {}
+        """Dict of subflows"""
+
         for sf_dict in self.j["subflows"]:
             print("test", sf_dict)
             # self.sp_cwnd = sp.IndexedBase("cwnd_{name}")
@@ -368,27 +371,27 @@ class MpTcpNumerics(cmd.Cmd):
                 **sf_dict
             )
 
-            self.subflows.update({sf_dict["name"]: subflow})
+            subflows.update({sf_dict["name"]: subflow})
 
         capabilities = self.j["capabilities"]
 
         # TODO pass as an argument ?
         sym_rcv_wnd = sp.Symbol(SymbolNames.ReceiverWindow.value, positive=True)
 
-        receiver = MpTcpReceiver(sym_rcv_wnd, capabilities, self.j, self.subflows)
-        sender = MpTcpSender(sym_rcv_wnd, self.j, None)
+        receiver = MpTcpReceiver(sym_rcv_wnd, capabilities, self.j, subflows)
+        sender = MpTcpSender(sym_rcv_wnd, self.j, subflows=subflows, scheduler=None)
 
         sim = Simulator(self.j, sender, receiver)
 
         # we start sending a full window over each path
             # sort them depending on fowd
         log.info("Initial send")
-        subflows = sender.subflows.values()
-        subflows = sorted(subflows, key=lambda x: x.fowd, reverse=True)
+        # subflows = sender.subflows.values()
+        ordered_subflows = sorted(subflows.values(), key=lambda x: x.fowd, reverse=True)
 
         # global current_time
         # current_time = 0
-        for sf in subflows:
+        for sf in ordered_subflows:
 
             # ca genere des contraintes
             # pkt = sf.generate_pkt(0, sender.snd_next)

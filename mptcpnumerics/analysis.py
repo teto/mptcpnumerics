@@ -33,19 +33,6 @@ fileHdl = logging.FileHandler("log",mode="w")
 fileHdl.setFormatter(formatter)
 log.addHandler(fileHdl)
 
-"""
-Hypotheses made in this simulator:
-- subflows send full windows each time
-- there is no data duplication, NEVER !
-- windows are stable, they don't change because you reach the maximum size allowed
-by rcv_window
-
-
-TODO:
--use a framework to trace some variables (save into a csv for instance)
--support NR-sack
--rename cwnd to max_cwnd
-"""
 
 constraint_types = [
         "buffer",
@@ -346,7 +333,8 @@ class MpTcpSender:
     # need to have dsn, cwnd, outstanding ?
 
     # TODO maintain statistics about the events and categorize them by HOLTypes
-    def __init__(self, rcv_wnd, config, scheduler):
+    def __init__(self, rcv_wnd, config, subflows,
+            scheduler):
         """
         :param rcv_wnd is a sympy symbol
         self.subflows is a dict( subflow_name, MpTcpSubflow)
@@ -356,6 +344,8 @@ class MpTcpSender:
         """Maximum size of the buffer 
         TODO: might be replaced by a sympy symbol depending on problem ? 
         """
+
+
 
         self.scheduler = scheduler
 
@@ -373,7 +363,7 @@ class MpTcpSender:
         self.constraints = []
         """Constraints (head of line blocking, flow control) are saved with sympy symbols. """
 
-        self.subflows = {}
+        self.subflows = subflows
         print(self.subflows)
 
 
@@ -553,21 +543,26 @@ class MpTcpReceiver:
 
     @property
     def rcv_next(self):
+        return self._rcv_next
 
     @rcv_next.setter
     def rcv_next(self, val):
 
-            log.debug("Changing rcv_next to %s", value)
+        log.debug("Changing rcv_next to %s", val)
+
         self._rcv_next = val
 
     @property
     def subflows(self):
-        return self._subflows)
+        return self._subflows
     # def inflight(self):
     #     raise Exception("TODO")
     #     # return map(self.subflows)
     #     pass
+
     # def __setattr__(self, name, value):
+
+
 # # TODO set it as a property instead
     #     if name == "rcv_next":
     #     self.__dict__[name] = value
@@ -607,7 +602,7 @@ class MpTcpReceiver:
         # TODO
         # self.subflows[sf_id].ack_window()
         e = ReceiverEvent(sf_id)
-        e.delay = self.subflows[sf_id]["bowd"]
+        e.delay = self.subflows[sf_id].bowd
         e.dack = self.rcv_next
         e.rcv_wnd = self.window_to_advertise()
         return e
@@ -682,7 +677,7 @@ class MpTcpReceiver:
         
 
         # we want to compute per_subflow throughput to know contributions
-        self.subflows[p.subflow_id]["rx_bytes"] += p.size 
+        self.subflows[p.subflow_id].rx_bytes += p.size 
 
         if MpTcpCapabilities.DAckReplication in self.config["receiver"]["capabilities"]:
             # for sf in self.subflows:
@@ -701,6 +696,17 @@ class MpTcpReceiver:
 
 class Simulator:
     """
+Hypotheses made in this simulator:
+- subflows send full windows each time
+- there is no data duplication, NEVER !
+- windows are stable, they don't change because you reach the maximum size allowed
+by rcv_window
+
+
+TODO:
+-use a framework to trace some variables (save into a csv for instance)
+-support NR-sack
+-rename cwnd to max_cwnd
     You should start feeding some packets/events (equivalent in this simulator)
     with the "add" method.
     You may also choose a time limit at which to "stop()" the simulator or alternatively wait
@@ -712,6 +718,8 @@ class Simulator:
     :ivar receiver Ploppyboulba
 
     """
+# TODO when possible move it to 
+    current_time = 0
         # should be ordered according to time
         # events = []
     def __init__(self, config, sender : MpTcpSender, receiver : MpTcpReceiver):
@@ -737,7 +745,7 @@ class Simulator:
         self.time_limit = None
         """Tells when the simulator should stop"""
     
-        self.current_time = 0
+        # self.current_time = 0
         """
         :ivar current_time this is a test
         """
