@@ -22,13 +22,14 @@ class MpTcpProblem(pu.LpProblem):
         # todo move rcv_buffer to
         self.rcv_buffer = rcv_buffer
 
-
+    # TODO merge both
     def generate_pulp_variables(self, subflows):
         """
         generate pulp variable
 
         Should depend of the mode ? for the receiver window ?
         """
+        log.debug("Generating lp variables from subflows: %s" % subflows)
         # generate subflow specific variables
         for sf in subflows.values():
             name = sf.sp_cwnd.name
@@ -39,31 +40,9 @@ class MpTcpProblem(pu.LpProblem):
 
         # might be overriden later
         lp_rcv_wnd = pu.LpVariable(SymbolNames.ReceiverWindow.value, lowBound=0, cat=pu.LpInteger)
+        log.debug("Generated %s" % self.variablesDict())
         # tab.update({sf.sp_cwnd.name: sf.cwnd_from_file}) 
         # upBound=sf.cwnd_from_file, 
-
-# def solve():
-    def sp_to_pulp(self, expr):
-        """
-        Converts a sympy expression into a pulp.LpAffineExpression
-        :param translation_dict
-        :expr sympy expression
-        :returns a pulp expression
-        """
-
-        if not isinstance(expr, sp.Symbol):
-            log.warning("%s not a symbol", expr)
-            return expr
-        
-        f = sp.lambdify( expr.free_symbols, expr)
-# translation_dict
-        # TODO test with pb.variablesDict()["cwnd_{%s}" % sf_name])    
-        translation_dict = self.variablesDict()
-
-        # TODO pass another function to handle the case where symbols are actual values ?
-        print("free_symbols", expr.free_symbols)
-        values = map( lambda x: translation_dict[x.name], expr.free_symbols)
-        return f(*values)
 
     # TODO bools to set some specific values ?
     def map_sp_to_pulp_variables(self, sender, receiver):
@@ -108,6 +87,31 @@ class MpTcpProblem(pu.LpProblem):
                 self.sp_to_pulp(sender.bytes_sent),
                 # self.sp_to_pulp(receiver.rx_bytes),
                 pulp_subflows)
+
+# def solve():
+    def sp_to_pulp(self, expr):
+        """
+        Converts a sympy expression into a pulp.LpAffineExpression
+        :param translation_dict
+        :expr sympy expression
+        :returns a pulp expression
+        """
+
+        if not isinstance(expr, sp.Symbol):
+            log.warning("%s not a symbol", expr)
+            return expr
+        
+        f = sp.lambdify( expr.free_symbols, expr)
+# translation_dict
+        # TODO test with pb.variablesDict()["cwnd_{%s}" % sf_name])    
+        translation_dict = self.variablesDict()
+
+        # TODO pass another function to handle the case where symbols are actual values ?
+        print("free_symbols", expr.free_symbols)
+        print("translation_dict", translation_dict)
+        values = map( lambda x: translation_dict[x.name], expr.free_symbols)
+        return f(*values)
+
 
 class ProblemOptimizeCwnd(MpTcpProblem):
     def __init__(self, buffer_size, name):
