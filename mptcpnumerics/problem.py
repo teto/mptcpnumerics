@@ -24,7 +24,7 @@ class MpTcpProblem(pu.LpProblem):
         self.lp_variables_dict = { "subflows": {} }
         """Dictionary of lp variables that maps symbolic names to lp variables"""
 
-    # TODO merge both
+
     def generate_lp_variables(self, subflows):
         """
         generate pulp variable
@@ -39,15 +39,19 @@ class MpTcpProblem(pu.LpProblem):
             # TODO set upBound later ? as a constraint 
             lp_cwnd = pu.LpVariable(sf.sp_cwnd.name, lowBound=0, cat=pu.LpInteger)
             lp_mss = pu.LpVariable(sf.sp_mss.name, lowBound=0, cat=pu.LpInteger)
-            self.lp_variables_dict["subflows"].update( 
-                {
-                    name : {
-                        "cwnd": lp_cwnd,
-                        "mss": lp_mss,
-                    }
-                }
-            )
+            self.lp_variables_dict.update({
+                    lp_cwnd.name: lp_cwnd,
+                    lp_mss.name: lp_mss,
 
+                })
+            # self.lp_variables_dict["subflows"].update( 
+            #     {
+            #         name : {
+            #             "cwnd": lp_cwnd,
+            #             "mss": lp_mss,
+            #         }
+            #     }
+            # )
 
         # might be overriden later
         lp_rcv_wnd = pu.LpVariable(SymbolNames.ReceiverWindow.value, lowBound=0, cat=pu.LpInteger)
@@ -57,11 +61,14 @@ class MpTcpProblem(pu.LpProblem):
         # tab.update({sf.sp_cwnd.name: sf.cwnd_from_file}) 
         # upBound=sf.cwnd_from_file, 
 
-    # TODO bools to set some specific values ?
-    def map_symbolic_to_lp_variables(self, sender, receiver):
+
+
+    def map_symbolic_to_lp_variables(self, *variables):
         """
         Converts symbolic variables (sympy ones) to linear programmning 
         aka pulp variables
+
+        :param variables: symbolic variables to convert
 
         .. see:: generate_lp_variables
 
@@ -73,36 +80,39 @@ class MpTcpProblem(pu.LpProblem):
 
             size of the buffer
         """
-        pulp_subflows  = {}
+        # pulp_subflows  = {}
+        return tuple(self.lp_variables_dict[var.name] for var in variables)
+
         # for sf in self.sender.subflows.values():
         #     tab.update({sf.sp_mss.name: sf.mss})
 
         # STEP 1: maps sympy-to-pulp VARIABLES
-        for name, sf in sender.subflows.items():
-            pulp_subflows.update(
-                    {
-                        name: {
-                            "cwnd":  self.sp_to_pulp(sf.sp_cwnd),
-                            "mss":  self.sp_to_pulp(sf.sp_mss) 
-                            }
-                        }
-                    )
+        # for name, sf in sender.subflows.items():
+        #     pulp_subflows.update(
+        #             {
+        #                 name: {
+        #                     "cwnd":  self.sp_to_pulp(sf.sp_cwnd),
+        #                     "mss":  self.sp_to_pulp(sf.sp_mss) 
+        #                     }
+        #                 }
+        #             )
 
-            # STEP 2: convert sympy EXPRESSIONS into pulp ones
-        for sf in sender.subflows:
-            pulp_subflows[name].update(
-                    {
-                        "rx":  self.sp_to_pulp(sf.sp_rx),
-                        "tx":  self.sp_to_pulp(sf.sp_tx) 
-                        }
-                    )
+        #     # STEP 2: convert sympy EXPRESSIONS into pulp ones
+        # for sf in sender.subflows:
+        #     pulp_subflows[name].update(
+        #             {
+        #                 "rx":  self.sp_to_pulp(sf.sp_rx),
+        #                 "tx":  self.sp_to_pulp(sf.sp_tx) 
+        #                 }
+        #             )
 
         # "rx_bytes": sp_to_pulp(sf.sp_rx),
         # "tx_bytes": sp_to_pulp(sf.sp_rx)
-        return (
-                self.sp_to_pulp(sender.bytes_sent),
-                # self.sp_to_pulp(receiver.rx_bytes),
-                pulp_subflows)
+        # return (
+                # self.sp_to_pulp(sender.bytes_sent),
+                # # self.sp_to_pulp(receiver.rx_bytes),
+                # pulp_subflows
+                # )
 
 # def solve():
     def sp_to_pulp(self, expr):
@@ -117,10 +127,10 @@ class MpTcpProblem(pu.LpProblem):
             log.warning("%s not a symbol", expr)
             return expr
         
-        f = sp.lambdify( expr.free_symbols, expr)
+        f = sp.lambdify(expr.free_symbols, expr)
 # translation_dict
         # TODO test with pb.variablesDict()["cwnd_{%s}" % sf_name])    
-        translation_dict = self.variablesDict()
+        translation_dict = self.lp_variables_dict
 
         # TODO pass another function to handle the case where symbols are actual values ?
         print("free_symbols", expr.free_symbols)

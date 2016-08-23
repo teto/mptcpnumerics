@@ -217,7 +217,7 @@ class MpTcpNumerics(cmd.Cmd):
                 "Subflow congestion windows repartition that maximizes goodput", )
 
         pb.generate_lp_variables(sim.sender.subflows)
-        res = pb.map_symbolic_to_lp_variables(sim.sender, sim.receiver)
+        res = pb.map_symbolic_to_lp_variables(sim.sender.bytes_sent, sim.receiver, )
         print("RES=\n",res)
         lp_tx, lp_subflows = res
 
