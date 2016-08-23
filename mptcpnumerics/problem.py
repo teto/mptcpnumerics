@@ -21,33 +21,49 @@ class MpTcpProblem(pu.LpProblem):
         super().__init__(args, kwargs)
         # todo move rcv_buffer to
         self.rcv_buffer = rcv_buffer
+        self.lp_variables_dict = { "subflows": {} }
+        """Dictionary of lp variables that maps symbolic names to lp variables"""
 
     # TODO merge both
-    def generate_pulp_variables(self, subflows):
+    def generate_lp_variables(self, subflows):
         """
         generate pulp variable
+        We separate the generation of 
 
         Should depend of the mode ? for the receiver window ?
         """
         log.debug("Generating lp variables from subflows: %s" % subflows)
         # generate subflow specific variables
-        for sf in subflows.values():
+        for name, sf in subflows.items():
             name = sf.sp_cwnd.name
             # TODO set upBound later ? as a constraint 
-            pu.LpVariable(sf.sp_cwnd.name, lowBound=0, cat=pu.LpInteger)
-            pu.LpVariable(sf.sp_mss.name, lowBound=0, cat=pu.LpInteger)
+            lp_cwnd = pu.LpVariable(sf.sp_cwnd.name, lowBound=0, cat=pu.LpInteger)
+            lp_mss = pu.LpVariable(sf.sp_mss.name, lowBound=0, cat=pu.LpInteger)
+            self.lp_variables_dict["subflows"].update( 
+                {
+                    name : {
+                        "cwnd": lp_cwnd,
+                        "mss": lp_mss,
+                    }
+                }
+            )
 
 
         # might be overriden later
         lp_rcv_wnd = pu.LpVariable(SymbolNames.ReceiverWindow.value, lowBound=0, cat=pu.LpInteger)
-        log.debug("Generated %s" % self.variablesDict())
+        self.lp_variables_dict[SymbolNames.ReceiverWindow.value] = lp_rcv_wnd
+        # log.debug("Generated %s" % self.variablesDict())
+        log.debug("Generated %s" % self.lp_variables_dict)
         # tab.update({sf.sp_cwnd.name: sf.cwnd_from_file}) 
         # upBound=sf.cwnd_from_file, 
 
     # TODO bools to set some specific values ?
-    def map_sp_to_pulp_variables(self, sender, receiver):
+    def map_symbolic_to_lp_variables(self, sender, receiver):
         """
-        Converts symbolic variables (sympy ones) to pulp variables
+        Converts symbolic variables (sympy ones) to linear programmning 
+        aka pulp variables
+
+        .. see:: generate_lp_variables
 
         Returns:
             pulp variables

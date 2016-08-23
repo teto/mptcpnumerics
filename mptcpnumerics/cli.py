@@ -216,8 +216,8 @@ class MpTcpNumerics(cmd.Cmd):
                 self.j["receiver"]["rcv_buffer"], # size of the 
                 "Subflow congestion windows repartition that maximizes goodput", )
 
-        pb.generate_pulp_variables(sim.sender.subflows)
-        res = pb.map_sp_to_pulp_variables(sim.sender, sim.receiver)
+        pb.generate_lp_variables(sim.sender.subflows)
+        res = pb.map_symbolic_to_lp_variables(sim.sender, sim.receiver)
         print("RES=\n",res)
         lp_tx, lp_subflows = res
 
