@@ -40,8 +40,8 @@ class MpTcpProblem(pu.LpProblem):
             lp_cwnd = pu.LpVariable(sf.sp_cwnd.name, lowBound=0, cat=pu.LpInteger)
             lp_mss = pu.LpVariable(sf.sp_mss.name, lowBound=0, cat=pu.LpInteger)
             self.lp_variables_dict.update({
-                    lp_cwnd.name: lp_cwnd,
-                    lp_mss.name: lp_mss,
+                    "cwnd": lp_cwnd,
+                    "mss": lp_mss,
 
                 })
             # self.lp_variables_dict["subflows"].update( 
@@ -62,6 +62,25 @@ class MpTcpProblem(pu.LpProblem):
         # upBound=sf.cwnd_from_file, 
 
 
+    def __iadd__(self, other):
+        """
+        Now this is very important/crucial
+
+        __iadd__ is equivalent to +=
+        Normally the parent class would accept a LpConstraint or LpAffineExpression
+        In our case, we might very well receive a sympy.core.relational.StrictLessThan or alike 
+        so we first need to check if we deal with a sympy rlationship - in which 
+        case we need to translate it to pulp -  , else we directly call the parent
+        """
+# StrictLessThan or childof
+        # if isinstance(other,sympy.core.relational.Unequality):
+        if isinstance(other,sympy.core.relational.Relational):
+            print("GOGOGO!:!!")
+            # TODO use eval ?
+            # other.rel_op # c l'operateur
+            sp_to_pulp(other.lhs) , other.rhs
+            
+        return self.addInPlace(other)
 
     def map_symbolic_to_lp_variables(self, *variables):
         """
