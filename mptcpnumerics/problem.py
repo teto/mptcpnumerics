@@ -40,8 +40,10 @@ class MpTcpProblem(pu.LpProblem):
             lp_cwnd = pu.LpVariable(sf.sp_cwnd.name, lowBound=0, cat=pu.LpInteger)
             lp_mss = pu.LpVariable(sf.sp_mss.name, lowBound=0, cat=pu.LpInteger)
             self.lp_variables_dict.update({
-                    "cwnd": lp_cwnd,
-                    "mss": lp_mss,
+                    # "cwnd": lp_cwnd,
+                    # "mss": lp_mss,
+                    lp_cwnd.name: lp_cwnd,
+                    lp_mss.name: lp_mss,
 
                 })
             # self.lp_variables_dict["subflows"].update( 
@@ -161,6 +163,10 @@ class MpTcpProblem(pu.LpProblem):
         print("free_symbols", expr.free_symbols)
         print("translation_dict", translation_dict)
         values = map( lambda x: translation_dict[x.name], expr.free_symbols)
+        values = list(values)
+        print("values", )
+        print("type values[0]", type(values[0]))
+        print("f", type(f), f(3,4))
         return f(*values)
 
 
