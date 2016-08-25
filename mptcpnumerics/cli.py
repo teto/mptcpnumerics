@@ -166,15 +166,13 @@ class MpTcpNumerics(cmd.Cmd):
             help=("Use this to force a max amount of throughput (%) on a subflow"
                 "Expects 2 arguments: subflow name followed by its ratio (<1)")
         )
-        sub_cwnd.add_argument('--sfmincwnd', nargs=2, action="append", 
-            default=[],
-            metavar="<SF_NAME> <min contribution ratio>",
+        sub_cwnd.add_argument('--sfmincwnd', dest="mincwnds", nargs=2,
+            action="append", default=[], metavar="<SF_NAME> <min contribution ratio>",
             help=("Use this to ensure a minimum congestion window on a subflow"
                 "Expects 2 arguments: subflow name followed by its ratio (<1)")
         )
-        sub_cwnd.add_argument('--sfmaxcwnd', nargs=2, action="append", 
-            default=[],
-            metavar="<SF_NAME> <max contribution %>",
+        sub_cwnd.add_argument('--sfmaxcwnd', dest="maxcwnds", nargs=2,
+            action="append", default=[], metavar="<SF_NAME> <max contribution %>",
             help=("Use this to limit the congestion window of a subflow"
                 "Expects 2 arguments: subflow name followed by its ratio (<1)")
         )
@@ -184,6 +182,14 @@ class MpTcpNumerics(cmd.Cmd):
             metavar="SUBFLOW",
             help=("Find a combination of congestion windows that can withstand "
                 " (continue to transmit) even under the worst RTO possible"
+                "")
+        )
+
+        sub_cwnd.add_argument('--output','-o', action="store", 
+            # dest="output",
+            default="problem.lp",
+            help=("filename where to export the problem"
+                ""
                 "")
         )
 
@@ -261,17 +267,17 @@ class MpTcpNumerics(cmd.Cmd):
         #     pb += sp_to_pulp(tab,self.receiver.subflows[sf_name]["cwnd"] ) <= 
 
         # subflow contribution should be no more than % of total
-        exit(1)
-        for sf_name, min_cwnd in cwnd_min:
+        # exit(1)
+        for sf_name, min_cwnd in args.mincwnds:
             print("name/ratio", sf_name, max_ratio)
-            pb += sp_to_pulp(tab, self.receiver.subflows[sf_name]["rx_bytes"] ) <= max_ratio * mptcp_throughput
+            pb += self.receiver.subflows[sf_name].rx_bytes <= max_ratio * mptcp_throughput
 
-
-        constraints = self.sender.constraints
+        constraints = sim.sender.constraints
         for constraint in constraints:
-            lp_constraint = sp_to_pulp(tab, constraint.size) <= sp_to_pulp(tab, constraint.wnd)
-            print("Adding constraint: " , lp_constraint)
+            lp_constraint = constraint.size <=  constraint.wnd
+            # log.debug("Adding constraint: %" % lp_constraint)
             pb += lp_constraint
+
         print("Pb has %d constraints." % pb.numConstraints() )
         # there is a common constraint to all problems, sum(cwnd) <= bound
 
@@ -282,7 +288,9 @@ class MpTcpNumerics(cmd.Cmd):
 
         # https://pythonhosted.org/PuLP/pulp.html
         # The problem data is written to an .lp file
-        pb.writeLP(output)
+        print("output=",args.output)
+        print("output=", pb.name)
+        pb.writeLP(args.output)
 
         pb.solve()
         # returned dictionary
@@ -290,29 +298,29 @@ class MpTcpNumerics(cmd.Cmd):
         ret = {
                 "status": pu.LpStatus[pb.status],
                 # "rcv_buffer": pb.variables()[SymbolNames.ReceiverWindow.value],
-                "throughput": pu.value(mptcp_throughput),
+                # "throughput": pu.value(mptcp_throughput),
                 "variables": [],
                 # a list ofs PerSubflowResult 
                 "subflows": {},
-                "objective": pu.value(pb.objective)
+                # "objective": pu.value(pb.objective)
         }
 
 # si le statut est  mauvais, il devrait générer une erreur/excepetion
 # LpStatusNotSolved
 
         # once pb is solved, we can return the per-subflow throughput
-        for sf_name, sf in self.receiver.subflows.items():
-            # cwnd/throughput/ratio
-            throughput = pu.value(sp_to_pulp(tab, sf["rx_bytes"]))
-            ratio = pu.value(throughput)/pu.value(mptcp_throughput)
+        # for sf_name, sf in self.receiver.subflows.items():
+        #     # cwnd/throughput/ratio
+        #     throughput = pu.value(sp_to_pulp(tab, sf["rx_bytes"]))
+        #     ratio = pu.value(throughput)/pu.value(mptcp_throughput)
 
-            cwnd = pu.value(pb.variablesDict()["cwnd_{%s}" % sf_name])
+        #     cwnd = pu.value(pb.variablesDict()["cwnd_{%s}" % sf_name])
 
-            result = PerSubflowResult(cwnd,throughput,ratio)
+        #     result = PerSubflowResult(cwnd,throughput,ratio)
 
-            ret["subflows"].update( { sf_name: result} )
+        #     ret["subflows"].update( { sf_name: result} )
 
-            # print("EXPR=", expr)
+        #     # print("EXPR=", expr)
 
         # The status of the solution is printed to the screen
         print("Status:", pu.LpStatus[pb.status])

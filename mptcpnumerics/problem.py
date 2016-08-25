@@ -18,7 +18,7 @@ class MpTcpProblem(pu.LpProblem):
 
         """
         # super().__init__("Finding minimum required buffer size", pu.LpMinimize)
-        super().__init__(args, kwargs)
+        super().__init__(*args, **kwargs)
         # todo move rcv_buffer to
         self.rcv_buffer = rcv_buffer
         self.lp_variables_dict = { "subflows": {} }
@@ -38,13 +38,12 @@ class MpTcpProblem(pu.LpProblem):
             name = sf.sp_cwnd.name
             # TODO set upBound later ? as a constraint 
             lp_cwnd = pu.LpVariable(sf.sp_cwnd.name, lowBound=0, cat=pu.LpInteger)
-            lp_mss = pu.LpVariable(sf.sp_mss.name, lowBound=0, cat=pu.LpInteger)
+            # lp_mss = pu.LpVariable(sf.sp_mss.name, lowBound=0, cat=pu.LpInteger)
             self.lp_variables_dict.update({
                     # "cwnd": lp_cwnd,
                     # "mss": lp_mss,
                     lp_cwnd.name: lp_cwnd,
-                    lp_mss.name: lp_mss,
-
+                    sf.sp_mss.name: sf.mss, # hardcode mss
                 })
             # self.lp_variables_dict["subflows"].update( 
             #     {
@@ -80,9 +79,13 @@ class MpTcpProblem(pu.LpProblem):
             print("GOGOGO!:!!")
             # TODO use eval ?
             # other.rel_op # c l'operateur
-            constraint = self.sp_to_pulp(other.lhs)
+            lconstraint = self.sp_to_pulp(other.lhs)
+            rconstraint = self.sp_to_pulp(other.rhs)
             # do the same with rhs
-            print(constraint)
+            print("constraint1=", lconstraint)
+            print("constraint2=", rconstraint)
+            # 
+            constraint = eval("lconstraint "+other.rel_op+ " rconstraint")
         else:
             constraint = other
             
@@ -162,22 +165,24 @@ class MpTcpProblem(pu.LpProblem):
         # TODO pass another function to handle the case where symbols are actual values ?
         print("free_symbols", expr.free_symbols)
         print("translation_dict", translation_dict)
-        values = map( lambda x: translation_dict[x.name], expr.free_symbols)
+        values = map(lambda x: translation_dict[x.name], expr.free_symbols)
         values = list(values)
-        print("values", )
-        print("type values[0]", type(values[0]))
-        print("f", type(f), f(3,4))
+        # print("values", )
+        # print("type values[0]", type(values[0]))
+        # print("f", type(f), f(3,4))
         return f(*values)
 
 
 class ProblemOptimizeCwnd(MpTcpProblem):
     def __init__(self, buffer_size, name):
-        super().__init__(buffer_size, name, pu.LpMaximize, )
+        # print("=====================", type(super()))
+        super().__init__(buffer_size, name, pu.LpMaximize)
 
 
 
 class ProblemOptimizeBuffer(MpTcpProblem):
     def __init__(self, name):
         lp_rcv_wnd = pu.LpVariable(SymbolNames.ReceiverWindow.value, lowBound=0, cat=pu.LpInteger )
+        # print("=====================", type(super()))
         super().__init__(lp_rcv_wnd, name, pu.LpMinimize)
             
