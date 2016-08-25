@@ -152,7 +152,9 @@ class MpTcpNumerics(cmd.Cmd):
         #         )
 
         # cela 
-        sub_cwnd.add_argument('--sfmin', nargs=2, action="append", 
+        sub_cwnd.add_argument('--sfmin', dest="minratios", nargs=2,
+            # type=lambda x,
+            action="append", 
             default=[],
             metavar="<SF_NAME> <min contribution ratio>",
             help=("Use this to force a minimum amount of throughput (%) on a subflow"
@@ -216,10 +218,10 @@ class MpTcpNumerics(cmd.Cmd):
                 self.j["receiver"]["rcv_buffer"], # size of the 
                 "Subflow congestion windows repartition that maximizes goodput", )
 
-        pb.generate_lp_variables(sim.sender.subflows)
-        res = pb.map_symbolic_to_lp_variables(sim.sender.bytes_sent, sim.receiver, )
-        print("RES=\n",res)
-        lp_tx, lp_subflows = res
+        # pb.generate_lp_variables(sim.sender.subflows)
+        # res = pb.map_symbolic_to_lp_variables(sim.sender.bytes_sent, sim.receiver, )
+        # print("RES=\n",res)
+        # lp_tx, lp_subflows = res
 
         # does it make sense to use Elastic Constraints ? that could help solve
         # impossible cases
@@ -242,14 +244,16 @@ class MpTcpNumerics(cmd.Cmd):
         #         })
 
         # bytes_sent is easy, it's like the last dsn
-        mptcp_throughput = lp_tx
-        print("mptcp_throughput",  mptcp_throughput)
-        pb.setObjective(mptcp_throughput)
+        # mptcp_throughput = lp_tx
+        mptcp_throughput = sim.sender.bytes_sent
+        # print("mptcp_throughput",  mptcp_throughput)
+        # pb.setObjective(mptcp_throughput)
 
         # ensure that subflow contribution is  at least % of total 
-        for sf_name, min_ratio in min_throughputs:
+        for sf_name, min_ratio in args.minratios:
             print("name/ratio", sf_name, min_ratio)
-            pb += lp_subflows[sf_name]["rx_bytes"] >= min_ratio * mptcp_throughput
+            print("type", type(min_ratio) )
+            pb += sim.sender.subflows[sf_name].rx_bytes >= float(min_ratio) * mptcp_throughput
 
         # subflow contribution should be no more than % of total
         # for sf_name, max_cwnd in args.cwnd_max:
@@ -257,6 +261,7 @@ class MpTcpNumerics(cmd.Cmd):
         #     pb += sp_to_pulp(tab,self.receiver.subflows[sf_name]["cwnd"] ) <= 
 
         # subflow contribution should be no more than % of total
+        exit(1)
         for sf_name, min_cwnd in cwnd_min:
             print("name/ratio", sf_name, max_ratio)
             pb += sp_to_pulp(tab, self.receiver.subflows[sf_name]["rx_bytes"] ) <= max_ratio * mptcp_throughput

@@ -349,7 +349,7 @@ class MpTcpSender:
 
         self.scheduler = scheduler
 
-        self.snd_next = 0    # left edge of the window/dsn (rename to snd_una ?)
+        self._snd_next = 0    # left edge of the window/dsn (rename to snd_una ?)
         """ Next #seq to send"""
 
         self.snd_una = 0
@@ -366,11 +366,20 @@ class MpTcpSender:
         self.subflows = subflows
         print(self.subflows)
 
+    
+    @property
+    def snd_next(self):
+        return self._snd_next
+    
+    @snd_next.setter
+    def snd_next(self, value):
+        log.debug("UPDATE snd_next to %s", value)
+        self._snd_next = value
 
-    def __setattr__(self, name, value):
-        if name == "snd_next":
-            log.debug("UPDATE snd_next to %s", value)
-        self.__dict__[name] = value
+    # def __setattr__(self, name, value):
+    #     if name == "snd_next":
+            
+    #     self.__dict__[name] = value
 
     # rename to inflight
     def inflight(self):

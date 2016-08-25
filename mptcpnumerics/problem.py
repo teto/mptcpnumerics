@@ -74,13 +74,19 @@ class MpTcpProblem(pu.LpProblem):
         """
 # StrictLessThan or childof
         # if isinstance(other,sympy.core.relational.Unequality):
-        if isinstance(other,sympy.core.relational.Relational):
+        if isinstance(other, sp.relational.Relational):
             print("GOGOGO!:!!")
             # TODO use eval ?
             # other.rel_op # c l'operateur
-            sp_to_pulp(other.lhs) , other.rhs
+            constraint = self.sp_to_pulp(other.lhs)
+            # do the same with rhs
+            print(constraint)
+        else:
+            constraint = other
             
-        return self.addInPlace(other)
+            #, other.rhs
+            
+        return super().__iadd__(constraint)
 
     def map_symbolic_to_lp_variables(self, *variables):
         """
@@ -143,8 +149,8 @@ class MpTcpProblem(pu.LpProblem):
         """
 
         if not isinstance(expr, sp.Symbol):
-            log.warning("%s not a symbol", expr)
-            return expr
+            log.warning("%s not a symbol but a %s" % (expr, type(expr)))
+            # return expr
         
         f = sp.lambdify(expr.free_symbols, expr)
 # translation_dict
