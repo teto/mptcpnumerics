@@ -50,6 +50,9 @@ class MpTcpNumerics(cmd.Cmd):
         super().__init__(completekey='tab', stdin=stdin)
 
     def do_load(self, filename):
+        """
+        Load from file
+        """
         with open(filename) as f:
             self.j = json.load(f)
             # print(self.j["subflows"])
