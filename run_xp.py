@@ -37,8 +37,8 @@ def iterate_over_fowd(name, step):
     for owd in range():
     results = m.do_optcwnd("")
     # TODO save the results in some tempdir
-j["subflows"]["slow"]["fowd"]
-j["subflows"]["slow"]["fowd"]
+# j["subflows"]["slow"]["fowd"]
+# j["subflows"]["slow"]["fowd"]
 
 
 def find_necessary_buffer():

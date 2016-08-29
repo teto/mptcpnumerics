@@ -40,7 +40,6 @@ class MpTcpNumerics(cmd.Cmd):
     """
     Main class , an interpreter
     """
-
     def __init__(self, stdin=sys.stdin):
         """
         stdin
@@ -66,6 +65,7 @@ class MpTcpNumerics(cmd.Cmd):
             #     # print("toto")
         return self.j
 
+
     def do_print(self, args):
 
         print("Number of subflows=%d" % len(self.j["subflows"]))
@@ -83,6 +83,7 @@ class MpTcpNumerics(cmd.Cmd):
             print(msg)
             # TODO sy.add varying overhead
             # sy.add
+
 
     def do_cycle(self, args):
         return self._compute_cycle_duration()
@@ -115,6 +116,11 @@ class MpTcpNumerics(cmd.Cmd):
         """
         One of the main user function
         WIP
+
+        .. seealso::
+
+            :py:class:`.problem.ProblemOptimizeBuffer`
+
         """
 
         parser = argparse.ArgumentParser(
@@ -122,7 +128,7 @@ class MpTcpNumerics(cmd.Cmd):
                 'gives the required buffered size to prevent head of line'
                 ' blocking depending on the scheduling')
         )
-        # TODO add options to accomodate RTO 
+        # TODO add options to accomodate RTO
         args = parser.parse_args(shlex.split(args))
 
 
@@ -142,28 +148,29 @@ class MpTcpNumerics(cmd.Cmd):
         One of the main user function
         """
 
+        # here we can use do_optcwn.__doc__ to get the
         sub_cwnd = argparse.ArgumentParser(
-            description=('Buffer size is fixed: finds the cogestion window '
+            description=('Buffer size is fixed: finds the congestion window '
             'combinations that give the best throughput'
             'under the constraints chosen on cli and topology file'
             )
         )
-    
-        # sub_cbr = subparsers.add_parser(SolvingMode.RcvBuffer.value, parents=[], 
+
+        # sub_cbr = subparsers.add_parser(SolvingMode.RcvBuffer.value, parents=[],
         #         help=('Gives the required buffered size to prevent head of line'
         #              ' blocking depending on the scheduling')
         #         )
 
-        # cela 
+        # cela
         sub_cwnd.add_argument('--sfmin', dest="minratios", nargs=2,
             # type=lambda x,
-            action="append", 
+            action="append",
             default=[],
             metavar="<SF_NAME> <min contribution ratio>",
             help=("Use this to force a minimum amount of throughput (%) on a subflow"
                 "Expects 2 arguments: subflow name followed by its ratio (<1)")
         )
-        sub_cwnd.add_argument('--sfmax', nargs=2, action="append", 
+        sub_cwnd.add_argument('--sfmax', nargs=2, action="append",
             default=[],
             metavar="<SF_NAME> <max contribution %>",
             help=("Use this to force a max amount of throughput (%) on a subflow"
@@ -180,7 +187,7 @@ class MpTcpNumerics(cmd.Cmd):
                 "Expects 2 arguments: subflow name followed by its ratio (<1)")
         )
 
-        sub_cwnd.add_argument('--nohol', nargs=1, action="append", 
+        sub_cwnd.add_argument('--nohol', nargs=1, action="append",
             default=[],
             metavar="SUBFLOW",
             help=("Find a combination of congestion windows that can withstand "
@@ -188,7 +195,7 @@ class MpTcpNumerics(cmd.Cmd):
                 "")
         )
 
-        sub_cwnd.add_argument('--output','-o', action="store", 
+        sub_cwnd.add_argument('--output','-o', action="store",
             # dest="output",
             default="problem.lp",
             help=("filename where to export the problem"
@@ -196,7 +203,7 @@ class MpTcpNumerics(cmd.Cmd):
                 "")
         )
 
-        # sub_cwnd.add_argument('--cbr', action="store_true", 
+        # sub_cwnd.add_argument('--cbr', action="store_true",
         #         default=[],
         #         # metavar="CONSTANT_BIT_RATE",
         #         help=("CBR: Constant Bit Rate: Tries to find a combination that minimizes"
@@ -207,7 +214,7 @@ class MpTcpNumerics(cmd.Cmd):
 
         # print( (SolvingMode.__members__.keys()))
         # parser.add_argument('type', choices=SolvingMode.__members__.keys(), help="Choose a solving mode")
-        # sub_cwnd.add_argument('--spread', type=int, 
+        # sub_cwnd.add_argument('--spread', type=int,
         #         help=("Will try to spread the load while keeping the throughput within the imposed limits"
         #         "compared to the optimal case "))
         # TODO pouvoir en mettre plusieurs
@@ -216,15 +223,15 @@ class MpTcpNumerics(cmd.Cmd):
         args = sub_cwnd.parse_args(shlex.split(args))
 
         duration = self._compute_cycle_duration()
-        
+
         # TODO run simulation with args
         sim = self._run_cycle(duration)
 
         # duration = self._compute_cycle()
         # TODO s'il y a le spread, il faut relancer le processus d'optimisation avec la contrainte
         # self.config
-        pb = problem.ProblemOptimizeCwnd( 
-                self.j["receiver"]["rcv_buffer"], # size of the 
+        pb = problem.ProblemOptimizeCwnd(
+                self.j["receiver"]["rcv_buffer"], # size of the
                 "Subflow congestion windows repartition that maximizes goodput", )
 
         pb.generate_lp_variables(sim.sender.subflows)
@@ -247,7 +254,7 @@ class MpTcpNumerics(cmd.Cmd):
 
         # for sf in self.sender.subflows.values():
         #     name = sf.sp_cwnd.name
-        #     tab.update({name: 
+        #     tab.update({name:
         #         # translate_subflow_cwnd(sf)
         #         pu.LpVariable(name, lowBound=0, upBound=sf.cwnd_from_file, cat=pu.LpInteger )
         #         })
@@ -256,24 +263,24 @@ class MpTcpNumerics(cmd.Cmd):
         # mptcp_throughput = lp_tx
         mptcp_throughput = sim.sender.bytes_sent
         # print("mptcp_throughput",  mptcp_throughput)
-        # pb.setObjective(mptcp_throughput)
+        pb.setObjective(mptcp_throughput)
 
-        # ensure that subflow contribution is  at least % of total 
+        # ensure that subflow contribution is  at least % of total
         for sf_name, min_ratio in args.minratios:
             print("name/ratio", sf_name, min_ratio)
             print("type", type(min_ratio) )
             pb += sim.sender.subflows[sf_name].rx_bytes >= float(min_ratio) * mptcp_throughput
 
         # subflow contribution should be no more than % of total
-        # for sf_name, max_cwnd in args.cwnd_max:
-        #     print("name/max_cwnd", sf_name, max_cwnd)
-        #     pb += sp_to_pulp(tab,self.receiver.subflows[sf_name]["cwnd"] ) <= 
+        for sf_name, max_cwnd in args.maxcwnds:
+            print("name/max_cwnd", sf_name, max_cwnd)
+            pb += sim.sender.subflows[sf_name].cwd <= max_cwnd
 
         # subflow contribution should be no more than % of total
         # exit(1)
         for sf_name, min_cwnd in args.mincwnds:
-            print("name/ratio", sf_name, max_ratio)
-            pb += self.receiver.subflows[sf_name].rx_bytes <= max_ratio * mptcp_throughput
+            print("name/ratio", sf_name, min_cwnd)
+            pb += sim.sender.subflows[sf_name].cwnd >= min_cwnd
 
         constraints = sim.sender.constraints
         for constraint in constraints:
@@ -281,7 +288,7 @@ class MpTcpNumerics(cmd.Cmd):
             # log.debug("Adding constraint: %" % lp_constraint)
             pb += lp_constraint
 
-        print("Pb has %d constraints." % pb.numConstraints() )
+        print("Pb has %d constraints." % pb.numConstraints())
         # there is a common constraint to all problems, sum(cwnd) <= bound
 
         # pb.assignVarsVals
@@ -297,19 +304,20 @@ class MpTcpNumerics(cmd.Cmd):
 
         pb.solve()
         # returned dictionary
-        # pb.constraints 
+        print("", pb.variablesDict())
+        # pb.constraints
         ret = {
                 "status": pu.LpStatus[pb.status],
                 # "rcv_buffer": pb.variables()[SymbolNames.ReceiverWindow.value],
                 # "throughput": pu.value(mptcp_throughput),
                 "variables": [],
-                # a list ofs PerSubflowResult 
+                # a list ofs PerSubflowResult
                 "subflows": {},
                 # "objective": pu.value(pb.objective)
         }
 
-# si le statut est  mauvais, il devrait générer une erreur/excepetion
-# LpStatusNotSolved
+        # si le statut est  mauvais, il devrait générer une erreur/excepetion
+        # LpStatusNotSolved
 
         # once pb is solved, we can return the per-subflow throughput
         # for sf_name, sf in self.receiver.subflows.items():
@@ -352,13 +360,14 @@ class MpTcpNumerics(cmd.Cmd):
         # for subflow in self.j:
         self.per_subflow_rto_constraints(res.subflow)
 
+
     def do_subflow_rto_constraints(self, args):
         # use args as the name of the subflow ids
         self.per_subflow_rto_constraints()
 
 
-    def _run_cycle(self, 
-        # sender, receiver, 
+    def _run_cycle(self,
+        # sender, receiver,
         duration,
         fainting_subflow=None,
         ):
@@ -366,7 +375,7 @@ class MpTcpNumerics(cmd.Cmd):
         Creates a sender and a receiver (from a topology file ?)
 
         Params:
-            fainting_subflow (str) 
+            fainting_subflow (str)
 
         Returns:
             Simulator
@@ -434,6 +443,7 @@ class MpTcpNumerics(cmd.Cmd):
         """
         return True
 
+
     def do_plot_overhead(self, args):
         """
         total_bytes is the x axis,
@@ -452,7 +462,6 @@ class MpTcpNumerics(cmd.Cmd):
 
         oh_mpc, oh_finaldss, oh_mpjoin, nb_subflows = sp.symbols("OH_{MP_CAPABLE} OH_{DFIN} OH_{MP_JOIN} N")
 
-# cls=Idx
         i = sp.Symbol('i', integer=True)
         total_bytes = sp.Symbol('bytes', )
         # nb_subflows = sp.Symbol('N', integer=True)
@@ -492,9 +501,8 @@ class MpTcpNumerics(cmd.Cmd):
                 n_dss:  dss_size(DssAck.NoAck, DssMapping.Simple),
         }
 
-
         # TODO substiture indexed values
-# http://stackoverflow.com/questions/26402387/sympy-summation-with-indexed-variable
+        # http://stackoverflow.com/questions/26402387/sympy-summation-with-indexed-variable
         # -- START --
         # f = lambda x: Subs(
         #         s.doit(),
@@ -503,7 +511,6 @@ class MpTcpNumerics(cmd.Cmd):
         #         ).doit()
         # f((30,10,2))
         # # -- END --
-
 
         # then we substitute what we can (subs accept an iterable, dict/list)
         # subs returns a new expression
@@ -586,6 +593,7 @@ def run():
     else:
         log.info("Interactive mode")
         analyzer.cmdloop()
+
 
 if __name__ == '__main__':
     run()

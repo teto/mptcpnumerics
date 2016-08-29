@@ -15,12 +15,10 @@ log = logging.getLogger(__name__)
 class MpTcpSubflow:
     """
     @author Matthieu Coudron
-
-    
     """
 
-    def __init__(self, 
-# upper_bound,  
+    def __init__(self,
+        # upper_bound,
         name,
         mss, fowd, bowd, loss, var, cwnd,
         # hardcoded_values,
@@ -32,7 +30,7 @@ class MpTcpSubflow:
         :param cwnd careful, there are 2 variables here, one symbolic, one a hard value
         :param sp_cwnd symbolic congestion window
         :param sp_mss symbolic Maximum Segment Size
-        :ivar 
+        :ivar
 
         # :param contribution computed by receiver
         """
@@ -66,7 +64,7 @@ class MpTcpSubflow:
 
         self.inflight = False
         """
-        This is a pretty crude simulator: it considers that all packets are sent 
+        This is a pretty crude simulator: it considers that all packets are sent
         at once, hence this boolean tells if the window is inflight
         """
 
@@ -156,7 +154,7 @@ class MpTcpTopology:
     subflow configuration
 
     .. literalinclude:: /../examples/double.json
-    
+
 
 
     """
@@ -172,7 +170,7 @@ class MpTcpTopology:
             :param filename
         """
 
-        log.info("Loading topology from %s" % filename ) 
+        log.info("Loading topology from %s" % filename )
         with open(filename) as filename:
             self.config = json.load(filename)
 

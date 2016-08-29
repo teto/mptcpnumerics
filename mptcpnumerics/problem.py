@@ -3,6 +3,8 @@ import sympy as sp
 import logging
 from . import SymbolNames
 
+import inspect
+
 log = logging.getLogger(__name__)
 
 
@@ -25,18 +27,37 @@ class MpTcpProblem(pu.LpProblem):
         """Dictionary of lp variables that maps symbolic names to lp variables"""
 
 
+    @staticmethod
+    def is_sympy(obj) -> bool:
+        return inspect.getmodule(obj).__package__.startswith("sympy")
+
+    def setObjective(self,obj):
+        # print("inspect,",inspect.getmodule(obj))
+        # print("inspect,",inspect.getmodule(obj) in sp)
+        if self.is_sympy(obj):
+            obj = self.sp_to_pulp(obj)
+
+        print("obj=", type(obj))
+        super().setObjective(obj)
+
+    def add_mapping(self):
+        """
+        Add mapping sympy -> pulp or integer
+        """
+
+
     def generate_lp_variables(self, subflows):
         """
         generate pulp variable
-        We separate the generation of 
+        We separate the generation of
 
         Should depend of the mode ? for the receiver window ?
         """
         log.debug("Generating lp variables from subflows: %s" % subflows)
         # generate subflow specific variables
         for name, sf in subflows.items():
-            name = sf.sp_cwnd.name
-            # TODO set upBound later ? as a constraint 
+            # name = sf.sp_cwnd.name
+            # TODO set upBound later ? as a constraint
             lp_cwnd = pu.LpVariable(sf.sp_cwnd.name, lowBound=0, cat=pu.LpInteger)
             # lp_mss = pu.LpVariable(sf.sp_mss.name, lowBound=0, cat=pu.LpInteger)
             self.lp_variables_dict.update({
@@ -45,7 +66,7 @@ class MpTcpProblem(pu.LpProblem):
                     lp_cwnd.name: lp_cwnd,
                     sf.sp_mss.name: sf.mss, # hardcode mss
                 })
-            # self.lp_variables_dict["subflows"].update( 
+            # self.lp_variables_dict["subflows"].update(
             #     {
             #         name : {
             #             "cwnd": lp_cwnd,
@@ -55,12 +76,10 @@ class MpTcpProblem(pu.LpProblem):
             # )
 
         # might be overriden later
-        lp_rcv_wnd = pu.LpVariable(SymbolNames.ReceiverWindow.value, lowBound=0, cat=pu.LpInteger)
-        self.lp_variables_dict[SymbolNames.ReceiverWindow.value] = lp_rcv_wnd
         # log.debug("Generated %s" % self.variablesDict())
         log.debug("Generated %s" % self.lp_variables_dict)
-        # tab.update({sf.sp_cwnd.name: sf.cwnd_from_file}) 
-        # upBound=sf.cwnd_from_file, 
+        # tab.update({sf.sp_cwnd.name: sf.cwnd_from_file})
+        # upBound=sf.cwnd_from_file,
 
 
     def __iadd__(self, other):
@@ -69,38 +88,43 @@ class MpTcpProblem(pu.LpProblem):
 
         __iadd__ is equivalent to +=
         Normally the parent class would accept a LpConstraint or LpAffineExpression
-        In our case, we might very well receive a sympy.core.relational.StrictLessThan or alike 
-        so we first need to check if we deal with a sympy rlationship - in which 
+        In our case, we might very well receive a sympy.core.relational.StrictLessThan or alike
+        so we first need to check if we deal with a sympy rlationship - in which
         case we need to translate it to pulp -  , else we directly call the parent
         """
-# StrictLessThan or childof
+        # StrictLessThan or childof
         # if isinstance(other,sympy.core.relational.Unequality):
-        if isinstance(other, sp.relational.Relational):
-            print("GOGOGO!:!!")
+        # if isinstance(other, sp.relational.Relational):
+        if self.is_sympy(other):
+            # print("GOGOGO!:!!")
             # TODO use eval ?
             # other.rel_op # c l'operateur
             lconstraint = self.sp_to_pulp(other.lhs)
             rconstraint = self.sp_to_pulp(other.rhs)
             # do the same with rhs
-            print("constraint1=", lconstraint)
-            print("constraint2=", rconstraint)
-            # 
+            # print("constraint1=", lconstraint)
+            # print("constraint2=", rconstraint)
+            # constructs an LpAffineExpression
             constraint = eval("lconstraint "+other.rel_op+ " rconstraint")
         else:
             constraint = other
-            
+
             #, other.rhs
-            
+
         return super().__iadd__(constraint)
 
     def map_symbolic_to_lp_variables(self, *variables):
         """
-        Converts symbolic variables (sympy ones) to linear programmning 
+        Converts symbolic variables (sympy ones) to linear programmning
         aka pulp variables
 
         :param variables: symbolic variables to convert
 
-        .. see:: generate_lp_variables
+        #
+
+        .. seealso::
+
+            :py:meth:`MpTcpProblem.generate_lp_variables`
 
         Returns:
             pulp variables
@@ -122,7 +146,7 @@ class MpTcpProblem(pu.LpProblem):
         #             {
         #                 name: {
         #                     "cwnd":  self.sp_to_pulp(sf.sp_cwnd),
-        #                     "mss":  self.sp_to_pulp(sf.sp_mss) 
+        #                     "mss":  self.sp_to_pulp(sf.sp_mss)
         #                     }
         #                 }
         #             )
@@ -132,7 +156,7 @@ class MpTcpProblem(pu.LpProblem):
         #     pulp_subflows[name].update(
         #             {
         #                 "rx":  self.sp_to_pulp(sf.sp_rx),
-        #                 "tx":  self.sp_to_pulp(sf.sp_tx) 
+        #                 "tx":  self.sp_to_pulp(sf.sp_tx)
         #                 }
         #             )
 
@@ -144,7 +168,6 @@ class MpTcpProblem(pu.LpProblem):
                 # pulp_subflows
                 # )
 
-# def solve():
     def sp_to_pulp(self, expr):
         """
         Converts a sympy expression into a pulp.LpAffineExpression
@@ -153,13 +176,13 @@ class MpTcpProblem(pu.LpProblem):
         :returns a pulp expression
         """
 
-        if not isinstance(expr, sp.Symbol):
+        # if not isinstance(expr, sp.Symbol):
+        if not self.is_sympy(expr):
             log.warning("%s not a symbol but a %s" % (expr, type(expr)))
             # return expr
-        
+
         f = sp.lambdify(expr.free_symbols, expr)
-# translation_dict
-        # TODO test with pb.variablesDict()["cwnd_{%s}" % sf_name])    
+        # TODO test with pb.variablesDict()["cwnd_{%s}" % sf_name])
         translation_dict = self.lp_variables_dict
 
         # TODO pass another function to handle the case where symbols are actual values ?
@@ -174,6 +197,9 @@ class MpTcpProblem(pu.LpProblem):
 
 
 class ProblemOptimizeCwnd(MpTcpProblem):
+    """
+    """
+
     def __init__(self, buffer_size, name):
         # print("=====================", type(super()))
         super().__init__(buffer_size, name, pu.LpMaximize)
@@ -181,8 +207,21 @@ class ProblemOptimizeCwnd(MpTcpProblem):
 
 
 class ProblemOptimizeBuffer(MpTcpProblem):
+    """
+    Congestion windows are fixed, given by topology:
+    gives the required buffered size to prevent head of line
+    blocking depending on the scheduling
+    """
+
     def __init__(self, name):
         lp_rcv_wnd = pu.LpVariable(SymbolNames.ReceiverWindow.value, lowBound=0, cat=pu.LpInteger )
         # print("=====================", type(super()))
         super().__init__(lp_rcv_wnd, name, pu.LpMinimize)
-            
+
+    def generate_lp_variables(self,):
+
+        super().generate_lp_variables()
+
+        lp_rcv_wnd = pu.LpVariable(SymbolNames.ReceiverWindow.value, lowBound=0, cat=pu.LpInteger)
+        self.lp_variables_dict[SymbolNames.ReceiverWindow.value] = lp_rcv_wnd
+

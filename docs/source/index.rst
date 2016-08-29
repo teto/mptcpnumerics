@@ -21,12 +21,17 @@ Contents:
    overhead
    topology
 
-.. automodule:: mptcpnumerics
+.. .. automodule:: mptcpnumerics
+..     :members:
+
+.. .. automodule:: mptcpnumerics.analysis
+..     :members:
+
+.. automodule:: mptcpnumerics.problem
     :members:
 
-.. automodule:: mptcpnumerics.analysis
+.. automodule:: mptcpnumerics.cli
     :members:
-
 
 
 
