@@ -83,11 +83,9 @@ class MpTcpSubflow:
 
 
     def __str__(self):
-        """
-        """
         return "Id={s.name} Rtt={s.fowd}+{s.bowd} inflight={s.outstanding}".format(
-                s=self
-                )
+            s=self
+        )
 
     def busy(self) -> bool:
         """

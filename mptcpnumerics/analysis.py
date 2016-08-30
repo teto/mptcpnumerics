@@ -57,7 +57,7 @@ constraint_types = [
 #         ]
 
 
-PerSubflowResult = namedtuple('PerSubflowResult', ["cwnd", "throughput", "ratio"])
+
 
 
 # class SymbolNames(Enum):
@@ -93,7 +93,7 @@ def analyze_results(ret):
         print("Variable to optimize: ", name, "(", type(name), ") =", pu.value(value), "(", type(value), ")")
     # print("Throughput")
     pp.pprint(ret)
-    
+
 
 
 # to drop
@@ -130,7 +130,7 @@ class SolvingMode(Enum):
 
 
     Cwnds: Find the window combinations that give the best throughput
-    rcv_buffer: computes Required buffer size 
+    rcv_buffer: computes Required buffer size
     """
     RcvBuffer = "buffer"
     OneWindow = "single_cwnd"
@@ -333,19 +333,16 @@ class MpTcpSender:
     # need to have dsn, cwnd, outstanding ?
 
     # TODO maintain statistics about the events and categorize them by HOLTypes
-    def __init__(self, rcv_wnd, config, subflows,
-            scheduler):
+    def __init__(self, rcv_wnd, snd_buffer, subflows, scheduler):
         """
         :param rcv_wnd is a sympy symbol
         self.subflows is a dict( subflow_name, MpTcpSubflow)
         """
         # what if we leave it unconstrained ?
-        self.snd_buf_max = config["sender"]["snd_buffer"]
-        """Maximum size of the buffer 
-        TODO: might be replaced by a sympy symbol depending on problem ? 
+        self.snd_buf_max = snd_buffer # config["sender"]["snd_buffer"]
+        """Maximum size of the buffer
+        TODO: might be replaced by a sympy symbol depending on problem ?
         """
-
-
 
         self.scheduler = scheduler
 
@@ -354,7 +351,6 @@ class MpTcpSender:
 
         self.snd_una = 0
         """Unacknowledged """
-        #self.rcv_wnd = config["receiver"]["rcv_buffer"]
         self.rcv_wnd = rcv_wnd
         """Receive window"""
 
@@ -366,11 +362,11 @@ class MpTcpSender:
         self.subflows = subflows
         print(self.subflows)
 
-    
+
     @property
     def snd_next(self):
         return self._snd_next
-    
+
     @snd_next.setter
     def snd_next(self, value):
         log.debug("UPDATE snd_next to %s", value)
@@ -378,7 +374,7 @@ class MpTcpSender:
 
     # def __setattr__(self, name, value):
     #     if name == "snd_next":
-            
+
     #     self.__dict__[name] = value
 
     # rename to inflight
@@ -683,10 +679,10 @@ class MpTcpReceiver:
         self.update_out_of_order()
 
         print("TODO: check against out of order list")
-        
+
 
         # we want to compute per_subflow throughput to know contributions
-        self.subflows[p.subflow_id].rx_bytes += p.size 
+        self.subflows[p.subflow_id].rx_bytes += p.size
 
         if MpTcpCapabilities.DAckReplication in self.config["receiver"]["capabilities"]:
             # for sf in self.subflows:
@@ -727,7 +723,7 @@ TODO:
     :ivar receiver Ploppyboulba
 
     """
-# TODO when possible move it to 
+# TODO when possible move it to
     current_time = 0
         # should be ordered according to time
         # events = []
@@ -753,7 +749,7 @@ TODO:
 
         self.time_limit = None
         """Tells when the simulator should stop"""
-    
+
         # self.current_time = 0
         """
         :ivar current_time this is a test
@@ -809,9 +805,9 @@ TODO:
     #     **kwargs
     #     ):
     #     """
-    #     TODO need to be able to 
+    #     TODO need to be able to
     #     factorize some code
-        
+
     #     :param min_troughputs a list of (subflow name, minimum contribution) tuples
     #     :param max_troughputs a list of (subflow name, maximum contribution) tuples
     #     :param mode: solving mode

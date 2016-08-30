@@ -8,11 +8,10 @@
 		"rcv_buffer": 40,
 		"capabilities": ["NR-SACK"]
 	},
-
 	"capabilities": ["NR-SACK"],
-	"subflows": [
+	"subflows": {
+		"slow":
 		{
-			"name": "slow",
 			"cwnd": 20,
 			"mss": 1,
 			"var": 10,
@@ -21,8 +20,7 @@
 			"loss": 0.05,
 			"contribution": 0.5
 		},
-		{
-			"name": "fast",
+		"fast": {
 			"cwnd": 15,
 			"mss": 1,
 			"var": 10,
@@ -31,5 +29,5 @@
 			"loss": 0.05,
 			"contribution": 0.5
 		}
-	]
+	}
 }

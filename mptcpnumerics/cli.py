@@ -19,10 +19,12 @@ import logging
 import pulp as pu
 import pprint
 import shlex
-from . import topology
+from .topology import MpTcpSubflow
 from .analysis import MpTcpReceiver, MpTcpSender, Simulator
 from . import problem
 from . import SymbolNames
+# from voluptuous import Required, All, Length, Range
+from jsonschema import validate
 
 log = logging.getLogger("mptcpnumerics")
 log.setLevel(logging.DEBUG)
@@ -36,6 +38,35 @@ fileHdl.setFormatter(formatter)
 log.addHandler(fileHdl)
 
 
+
+def validate_config(d):
+    """
+
+    object_hook used by json.load
+    """
+    print(json.dumps(d))
+    # schema = Schema({
+    #   Required('name'): All(str, Length(min=1)),
+    #   Required('subflows'): [],
+    #   # Required('per_page', default=5): All(int, Range(min=1, max=20)),
+    #   # 'page': All(int, Range(min=0)),
+    # }, required=True)
+    # schema(d)
+    # todo use json-schema
+    for name, sf_dict in d["subflows"].items():
+        print("test", sf_dict)
+        # self.sp_cwnd = sp.IndexedBase("cwnd_{name}")
+        # upper_bound = min(self.snd_buf_max, self.rcv_wnd)
+        # cwnd has to be <= min(rcv_buf, snd_buff) TODO add
+        # upper_bound = self.rcv_wnd
+        # subflow = MpTcpSubflow( upper_bound=upper_bound, **sf_dict)
+        subflow = MpTcpSubflow(
+            # upper_bound=upper_bound,
+            **sf_dict
+        )
+        d["subflows"][name] = subflow
+    return d
+
 class MpTcpNumerics(cmd.Cmd):
     """
     Main class , an interpreter
@@ -45,25 +76,53 @@ class MpTcpNumerics(cmd.Cmd):
         stdin
         """
         self.prompt = "Rdy>"
+        self.j = {}
         # stdin ?
         super().__init__(completekey='tab', stdin=stdin)
 
-    def do_load(self, filename):
+
+    @property
+    def rcv_buffer(self):
+        return self.j["receiver"]["rcv_buffer"]
+
+
+    @property
+    def subflows(self):
+        return self.j["subflows"]
+
+    @property
+    def config(self):
+        return self.j
+
+
+    @config.setter
+    def config(self, value):
+        """
+        Now this is where one should validate_config
+        """
+        # TODO call validate_config
+        for name, settings in value["subflows"].items():
+            sf = MpTcpSubflow(name, **settings)
+            value["subflows"].update({name: sf})
+        self.j = value
+        return self.j
+
+    def do_load_from_file(self, filename):
         """
         Load from file
         """
         with open(filename) as f:
-            self.j = json.load(f)
+            # object_hook
+            self.config = json.load(f)
             # print(self.j["subflows"])
-            total = sum(map(lambda x: x["cwnd"], self.j["subflows"]))
-            print("Total of Cwnd=", total)
-            # self.sender =
+            # total = sum(map(lambda x: x["cwnd"], self.j["subflows"]))
             # self.subflows = map( lambda x: MpTcpSubflow(), self.j["subflows"])
-            # self.subflows = {}
-            # for sf in self.j["subflows"]:
-            #     self.subflows.update({sf["name"]: sf})
+            # for name, settings in self.j["subflows"].items():
+            #     sf = MpTcpSubflow(name, **settings)
+            #     self.j["subflows"].update({name: sf})
+        print("config", self.config)
             #     # print("toto")
-        return self.j
+        return self.config
 
 
     def do_print(self, args):
@@ -71,16 +130,16 @@ class MpTcpNumerics(cmd.Cmd):
         print("Number of subflows=%d" % len(self.j["subflows"]))
         for idx, s in enumerate(self.j["subflows"]):
             print(s)
-            msg = "Sf {id} MSS={mss} RTO={rto} rtt={rtt}={fowd}+{bowd}".format(
-                # % (idx, s["mss"], rto(s["f"]+s["b"], s['var']))
-                id=idx,
-                # rto=rto(s["fowd"] + s["bowd"], s["var"]),
-                mss=s["mss"],
-                rtt=s["fowd"] + s["bowd"],
-                fowd=s["fowd"],
-                bowd=s["bowd"],
-            )
-            print(msg)
+            # msg = "Sf {id} MSS={mss} RTO={rto} rtt={rtt}={fowd}+{bowd}".format(
+            #     # % (idx, s["mss"], rto(s["f"]+s["b"], s['var']))
+            #     id=idx,
+            #     # rto=rto(s["fowd"] + s["bowd"], s["var"]),
+            #     mss=s["mss"],
+            #     rtt=s["fowd"] + s["bowd"],
+            #     fowd=s["fowd"],
+            #     bowd=s["bowd"],
+            # )
+            # print(msg)
             # TODO sy.add varying overhead
             # sy.add
 
@@ -101,7 +160,7 @@ class MpTcpNumerics(cmd.Cmd):
         returns (approximate lcm of all subflows), (perfect lcm ?)
         """
 
-        rtts = list(map(lambda x: x["fowd"] + x["bowd"], self.j["subflows"]))
+        rtts = list(map(lambda x: x.rtt(), self.subflows.values()))
         lcm = sp.ilcm(*rtts)
 
         # lcm = rtts.pop()
@@ -146,6 +205,11 @@ class MpTcpNumerics(cmd.Cmd):
     def do_optcwnd(self, args):
         """
         One of the main user function
+
+        .. seealso::
+
+            :py:class:`.problem.ProblemOptimizeCwnd`
+
         """
 
         # here we can use do_optcwn.__doc__ to get the
@@ -303,18 +367,21 @@ class MpTcpNumerics(cmd.Cmd):
         pb.writeLP(args.output)
 
         pb.solve()
+
         # returned dictionary
-        print("", pb.variablesDict())
-        # pb.constraints
-        ret = {
-                "status": pu.LpStatus[pb.status],
-                # "rcv_buffer": pb.variables()[SymbolNames.ReceiverWindow.value],
-                # "throughput": pu.value(mptcp_throughput),
-                "variables": [],
-                # a list ofs PerSubflowResult
-                "subflows": {},
-                # "objective": pu.value(pb.objective)
-        }
+        result = pb.generate_result()
+        print(result)
+        # print("", pb.variablesDict())
+        # # pb.constraints
+        # result = {
+        #         "status": pu.LpStatus[pb.status],
+        #         # "rcv_buffer": pb.variables()[SymbolNames.ReceiverWindow.value],
+        #         # "throughput": pu.value(mptcp_throughput),
+        #         # a list ofs PerSubflowResult
+        #         # "subflows": {},
+        #         # "objective": pu.value(pb.objective)
+        # }
+        # result.update(pb.variablesDict())
 
         # si le statut est  mauvais, il devrait générer une erreur/excepetion
         # LpStatusNotSolved
@@ -324,23 +391,20 @@ class MpTcpNumerics(cmd.Cmd):
         #     # cwnd/throughput/ratio
         #     throughput = pu.value(sp_to_pulp(tab, sf["rx_bytes"]))
         #     ratio = pu.value(throughput)/pu.value(mptcp_throughput)
-
         #     cwnd = pu.value(pb.variablesDict()["cwnd_{%s}" % sf_name])
-
         #     result = PerSubflowResult(cwnd,throughput,ratio)
-
         #     ret["subflows"].update( { sf_name: result} )
-
         #     # print("EXPR=", expr)
 
         # The status of the solution is printed to the screen
         print("Status:", pu.LpStatus[pb.status])
 
-        ret["variables"] = pb.variablesDict()
+        # ret["variables"] = pb.variablesDict()
+        # result.update(pb.variablesDict())
         # Each of the variables is printed with it's resolved optimum value
         # The optimised objective function value is printed to the screen
         # print("Total Cost of Ingredients per can = ", value(pb.objective))
-        return ret
+        return result
 
 
     def do_compute_rto_constraints(self, args):
@@ -366,6 +430,8 @@ class MpTcpNumerics(cmd.Cmd):
         self.per_subflow_rto_constraints()
 
 
+    # TODO make it static
+    # @staticmethod
     def _run_cycle(self,
         # sender, receiver,
         duration,
@@ -381,30 +447,29 @@ class MpTcpNumerics(cmd.Cmd):
             Simulator
         """
 
-        subflows = {}
         """Dict of subflows"""
 
-        for sf_dict in self.j["subflows"]:
-            print("test", sf_dict)
-            # self.sp_cwnd = sp.IndexedBase("cwnd_{name}")
-            # upper_bound = min(self.snd_buf_max, self.rcv_wnd)
-            # cwnd has to be <= min(rcv_buf, snd_buff) TODO add
-            # upper_bound = self.rcv_wnd
-            # subflow = MpTcpSubflow( upper_bound=upper_bound, **sf_dict)
-            subflow = topology.MpTcpSubflow(
-                # upper_bound=upper_bound,
-                **sf_dict
-            )
+        # for sf_dict in self.j["subflows"]:
+        #     print("test", sf_dict)
+        #     # self.sp_cwnd = sp.IndexedBase("cwnd_{name}")
+        #     # upper_bound = min(self.snd_buf_max, self.rcv_wnd)
+        #     # cwnd has to be <= min(rcv_buf, snd_buff) TODO add
+        #     # upper_bound = self.rcv_wnd
+        #     # subflow = MpTcpSubflow( upper_bound=upper_bound, **sf_dict)
+        #     subflow = MpTcpSubflow(
+        #         # upper_bound=upper_bound,
+        #         **sf_dict
+        #     )
 
-            subflows.update({sf_dict["name"]: subflow})
+        #     subflows.update({sf_dict["name"]: subflow})
 
         capabilities = self.j["capabilities"]
 
         # TODO pass as an argument ?
         sym_rcv_wnd = sp.Symbol(SymbolNames.ReceiverWindow.value, positive=True)
 
-        receiver = MpTcpReceiver(sym_rcv_wnd, capabilities, self.j, subflows)
-        sender = MpTcpSender(sym_rcv_wnd, self.j, subflows=subflows, scheduler=None)
+        receiver = MpTcpReceiver(sym_rcv_wnd, capabilities, self.j, self.subflows)
+        sender = MpTcpSender(sym_rcv_wnd, self.j["sender"]["snd_buffer"], subflows=dict(self.subflows), scheduler=None)
 
         sim = Simulator(self.j, sender, receiver)
 
@@ -412,7 +477,7 @@ class MpTcpNumerics(cmd.Cmd):
             # sort them depending on fowd
         log.info("Initial send")
         # subflows = sender.subflows.values()
-        ordered_subflows = sorted(subflows.values(), key=lambda x: x.fowd, reverse=True)
+        ordered_subflows = sorted(self.subflows.values(), key=lambda x: x.fowd, reverse=True)
 
         # global current_time
         # current_time = 0
@@ -586,7 +651,7 @@ def run():
     # print("Log level set to %s " % logging.getLevelName(level))
 
     analyzer = MpTcpNumerics()
-    analyzer.do_load(args.input_file)
+    analyzer.do_load_from_file(args.input_file)
     if unknown_args:
         log.info("One-shot command: %s" % unknown_args)
         analyzer.onecmd(' '.join(unknown_args))

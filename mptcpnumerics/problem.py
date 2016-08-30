@@ -1,34 +1,43 @@
 import pulp as pu
 import sympy as sp
 import logging
+import csv
+from collections import namedtuple
 from . import SymbolNames
 
 import inspect
 
 log = logging.getLogger(__name__)
 
-
+PerSubflowResult = namedtuple('PerSubflowResult', ["cwnd", "throughput", "ratio"])
 
 class MpTcpProblem(pu.LpProblem):
     """
+    Overrides pulp LpProblem mostly to provide automatic conversion between
+    sympy and pulp
     """
 
-    def __init__(self, rcv_buffer, *args, **kwargs):
+    def __init__(self, rcv_buf, *args, **kwargs):
         """
         do we care about Sim anymore ?
-        :param rcv_buffer might be the symbolic value or an integer
+        :param rcv_buffer: might be the symbolic value or an integer
 
         """
         # super().__init__("Finding minimum required buffer size", pu.LpMinimize)
         super().__init__(*args, **kwargs)
         # todo move rcv_buffer to
-        self.rcv_buffer = rcv_buffer
-        self.lp_variables_dict = { "subflows": {} }
+        # self.rcv_buffer = rcv_buffer
+        self.lp_variables_dict = { } #"subflows": {} }
         """Dictionary of lp variables that maps symbolic names to lp variables"""
+
+        self.add_mapping(SymbolNames.ReceiverWindow.value, rcv_buf)
 
 
     @staticmethod
     def is_sympy(obj) -> bool:
+        """
+        Can tell if obj belongs to the sympy module
+        """
         return inspect.getmodule(obj).__package__.startswith("sympy")
 
     def setObjective(self,obj):
@@ -40,13 +49,17 @@ class MpTcpProblem(pu.LpProblem):
         print("obj=", type(obj))
         super().setObjective(obj)
 
-    def add_mapping(self):
+    def add_mapping(self, name : str, value):
         """
         Add mapping sympy -> pulp or integer
         """
+        if name in self.lp_variables_dict:
+            raise ValueError("Already defined")
+
+        self.lp_variables_dict[name] = value
 
 
-    def generate_lp_variables(self, subflows):
+    def generate_lp_variables(self, subflows, *args, **kwargs):
         """
         generate pulp variable
         We separate the generation of
@@ -195,14 +208,55 @@ class MpTcpProblem(pu.LpProblem):
         # print("f", type(f), f(3,4))
         return f(*values)
 
+    def generate_result(self):
+        """
+        Should be called only once the problem got solved
+        """
+        # to be called with solve
+        # todo add parameters of lp_variables_dict ?
+        result = {
+                "status": pu.LpStatus[self.status],
+                # "rcv_buffer": pb.variables()[SymbolNames.ReceiverWindow.value],
+                # "throughput": pu.value(mptcp_throughput),
+                # a list ofs PerSubflowResult
+                # "subflows": {},
+                # "objective": pu.value(pb.objective)
+        }
+        # for key, var in self.variablesDict():
+        for key, var in self.lp_variables_dict.items():
+            print("key/var", key, var)
+            result.update({key: pu.value(var)})
+
+        # result.update(self.variablesDict())
+        # result.update(self.variablesDict())
+        print("result", result)
+        # print("variable_dict", self.variablesDict())
+        return result
+
+    # @staticmethod
+    # append_to_csv ?
+    def export_to_csv(self, filename, results):
+        """
+        Attempts to export results of the problem
+        results must be iterable
+        TODO should be able to tell rows
+        """
+        with open(filename, 'w', newline='') as f:
+            writer = csv.writer(f)
+            csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writerows(results)
 
 class ProblemOptimizeCwnd(MpTcpProblem):
     """
+    hello world
     """
 
     def __init__(self, buffer_size, name):
         # print("=====================", type(super()))
         super().__init__(buffer_size, name, pu.LpMaximize)
+
+    # def generate_lp_variables(self, *args, **kwargs):
+    #     super().generate_lp_variables(*args, **kwargs)
 
 
 
@@ -218,10 +272,11 @@ class ProblemOptimizeBuffer(MpTcpProblem):
         # print("=====================", type(super()))
         super().__init__(lp_rcv_wnd, name, pu.LpMinimize)
 
-    def generate_lp_variables(self,):
+    # def generate_lp_variables(self, *args, **kwargs):
 
-        super().generate_lp_variables()
+    #     super().generate_lp_variables()
 
-        lp_rcv_wnd = pu.LpVariable(SymbolNames.ReceiverWindow.value, lowBound=0, cat=pu.LpInteger)
-        self.lp_variables_dict[SymbolNames.ReceiverWindow.value] = lp_rcv_wnd
+
+    #     lp_rcv_wnd = pu.LpVariable(SymbolNames.ReceiverWindow.value, lowBound=0, cat=pu.LpInteger)
+    #     self.lp_variables_dict[SymbolNames.ReceiverWindow.value] = lp_rcv_wnd
 

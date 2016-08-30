@@ -43,7 +43,7 @@ class TestCommand(Command):
 # How to package ?
 # http://python-packaging-user-guide.readthedocs.org/en/latest/distributing/#setup-py
 # http://pythonhosted.org/setuptools/setuptools.html#declaring-dependencies
-# 
+#
 # if something fail during install, try running the script with sthg like
 # DISTUTILS_DEBUG=1 python3.5 setup.py install --user -vvv
 
@@ -102,12 +102,12 @@ setup(name="mptcpnumerics",
       },
       # pandas should include matplotlib dependancy right ?
       install_requires=[
-          # 'stevedore',  # to implement a plugin mechanism
           'matplotlib', # for plotting
           # 'pandas>=0.17.1', # to load and process csv files
             # those dependancies might made optional later or the package split into two
           'sympy', #for symbolic computing
           'sortedcontainers', # for the mini mptcp simulator events list
+          'voluptuous', # for the mini mptcp simulator events list
           'pulp',
           ],
       # for now the core is not modular enough so just check that running the process produces the same files

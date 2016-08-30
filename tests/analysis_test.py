@@ -18,13 +18,13 @@ class TestAnalysis(TestCase):
 
         self.m = ma.MpTcpNumerics()
         # self.assertTrue
-        # self.m.do_load("examples/topology.json")
+        # self.m.do_load_from_file("examples/topology.json")
 
     def test_double(self):
         # TODO test when launched via subprocess 
         # - with a list of commands passed via stdin
         # without constraints there should be a prevalent one
-        j = self.m.do_load("examples/double.json")
+        j = self.m.do_load_from_file("examples/double.json")
         # self.m.do_compute_constraints() 
 
     def test_batch(self):
@@ -35,7 +35,7 @@ class TestAnalysis(TestCase):
     # def test_load(self):
     #     # to test for errors
     #     # with self.assertRaises(ValueError):
-    #     self.m.do_load("examples/double.json")
+    #     self.m.do_load_from_file("examples/double.json")
 
 
     @unittest.skip("Module not mature yet")
