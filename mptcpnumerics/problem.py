@@ -147,39 +147,7 @@ class MpTcpProblem(pu.LpProblem):
 
             size of the buffer
         """
-        # pulp_subflows  = {}
         return tuple(self.lp_variables_dict[var.name] for var in variables)
-
-        # for sf in self.sender.subflows.values():
-        #     tab.update({sf.sp_mss.name: sf.mss})
-
-        # STEP 1: maps sympy-to-pulp VARIABLES
-        # for name, sf in sender.subflows.items():
-        #     pulp_subflows.update(
-        #             {
-        #                 name: {
-        #                     "cwnd":  self.sp_to_pulp(sf.sp_cwnd),
-        #                     "mss":  self.sp_to_pulp(sf.sp_mss)
-        #                     }
-        #                 }
-        #             )
-
-        #     # STEP 2: convert sympy EXPRESSIONS into pulp ones
-        # for sf in sender.subflows:
-        #     pulp_subflows[name].update(
-        #             {
-        #                 "rx":  self.sp_to_pulp(sf.sp_rx),
-        #                 "tx":  self.sp_to_pulp(sf.sp_tx)
-        #                 }
-        #             )
-
-        # "rx_bytes": sp_to_pulp(sf.sp_rx),
-        # "tx_bytes": sp_to_pulp(sf.sp_rx)
-        # return (
-                # self.sp_to_pulp(sender.bytes_sent),
-                # # self.sp_to_pulp(receiver.rx_bytes),
-                # pulp_subflows
-                # )
 
     def sp_to_pulp(self, expr):
         """
@@ -208,6 +176,7 @@ class MpTcpProblem(pu.LpProblem):
         # print("f", type(f), f(3,4))
         return f(*values)
 
+
     def generate_result(self):
         """
         Should be called only once the problem got solved
@@ -220,7 +189,7 @@ class MpTcpProblem(pu.LpProblem):
                 # "throughput": pu.value(mptcp_throughput),
                 # a list ofs PerSubflowResult
                 # "subflows": {},
-                # "objective": pu.value(pb.objective)
+                "objective": pu.value(self.objective)
         }
         # for key, var in self.variablesDict():
         for key, var in self.lp_variables_dict.items():
@@ -246,6 +215,7 @@ class MpTcpProblem(pu.LpProblem):
             csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writerows(results)
 
+
 class ProblemOptimizeCwnd(MpTcpProblem):
     """
     hello world
@@ -269,8 +239,11 @@ class ProblemOptimizeBuffer(MpTcpProblem):
 
     def __init__(self, name):
         lp_rcv_wnd = pu.LpVariable(SymbolNames.ReceiverWindow.value, lowBound=0, cat=pu.LpInteger )
+
+        self.add_mapping(SymbolNames.ReceiverWindow.value, lp_rcv_wnd)
         # print("=====================", type(super()))
         super().__init__(lp_rcv_wnd, name, pu.LpMinimize)
+        self.setObjective(lp_rcv_wnd)
 
     # def generate_lp_variables(self, *args, **kwargs):
 

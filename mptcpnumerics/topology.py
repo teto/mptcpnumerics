@@ -18,10 +18,8 @@ class MpTcpSubflow:
     """
 
     def __init__(self,
-        # upper_bound,
         name,
         mss, fowd, bowd, loss, var, cwnd,
-        # hardcoded_values,
         **extra
     ):
         """
@@ -81,6 +79,11 @@ class MpTcpSubflow:
         self.loss_rate = loss
         """Unused"""
 
+    def to_csv(self):
+        return {
+            "fowd": self.fowd,
+            "bowd": self.bowd,
+        }
 
     def __str__(self):
         return "Id={s.name} Rtt={s.fowd}+{s.bowd} inflight={s.outstanding}".format(
@@ -152,8 +155,6 @@ class MpTcpTopology:
     subflow configuration
 
     .. literalinclude:: /../examples/double.json
-
-
 
     """
     def __init__(self):

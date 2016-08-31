@@ -39,31 +39,7 @@ constraint_types = [
         "cwnd",
         ]
 
-# def sp_to_pulp(translation_dict, expr):
-#     """
-#     Converts
-#     """
-#     temp = {}
-#     # todo should we use lambdify
-#     for var, coef in expr.as_coefficients_dict().items():
-#         # print("type(coef)=", type(coef), "typeof(var)=", type(var))
-#         temp.update( {coef: translation_dict[var]} )
 
-#     res = pu.LpAffineExpression(temp, )
-#     return res
-
-# variables = [
-#         rcv_win:
-#         ]
-
-
-
-
-
-# class SymbolNames(Enum):
-#     ReceiverWindow = "rcv_wnd"
-
-# print("coef ", var,  " ", coef)
 def dump_translation_dict(d):
     """
     help debugging

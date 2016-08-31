@@ -145,7 +145,7 @@ class MpTcpNumerics(cmd.Cmd):
 
 
     def do_cycle(self, args):
-        return self._compute_cycle_duration()
+        return self.compute_cycle_duration()
 
 
     def _max_fowd_and_max_bowd(self):
@@ -155,7 +155,7 @@ class MpTcpNumerics(cmd.Cmd):
         max_bowd = max(self.j["subflows"], key="bowd")
         return max_fowd + max_bowd
 
-    def _compute_cycle_duration(self):
+    def compute_cycle_duration(self):
         """
         returns (approximate lcm of all subflows), (perfect lcm ?)
         """
@@ -191,16 +191,36 @@ class MpTcpNumerics(cmd.Cmd):
         args = parser.parse_args(shlex.split(args))
 
 
+        duration = self.compute_cycle_duration()
+        sim = self.run_cycle(duration)
+
+        # NOTE: this also sets the objective
         pb = problem.MpTcpProblem("Finding minimum required buffer size", pu.LpMinimize)
         # pb += lp_rcv_wnd, "Buffer size"
         # tab[SymbolNames.ReceiverWindow.value] = lp_rcv_wnd
         # for sf in self.sender.subflows.values():
         #     tab.update({sf.sp_cwnd.name: sf.cwnd_from_file})
 
+        # TODO
         # en fait ca c faut on peut avoir des cwnd , c juste le inflight qui doit pas depasser
         # pb +=  sum(cwnds) <= lp_rcv_wnd
 
+
+        pb.generate_lp_variables(sim.sender.subflows)
+
+        # add constraints from the simulation
+        for constraint in sim.sender.constraints:
+            print("CONS=", constraint)
+            pb += constraint
+
+        status = pb.solve()
+        result = pb.generate_result()
         # mptcp_throughput = sp_to_pulp(tab, self.sender.bytes_sent)
+
+
+        print("Status:", pu.LpStatus[pb.status])
+
+        return result
 
     def do_optcwnd(self, args):
         """
@@ -276,20 +296,10 @@ class MpTcpNumerics(cmd.Cmd):
         #             " and this for every subflow.")
         #         )
 
-        # print( (SolvingMode.__members__.keys()))
-        # parser.add_argument('type', choices=SolvingMode.__members__.keys(), help="Choose a solving mode")
-        # sub_cwnd.add_argument('--spread', type=int,
-        #         help=("Will try to spread the load while keeping the throughput within the imposed limits"
-        #         "compared to the optimal case "))
-        # TODO pouvoir en mettre plusieurs
-        # parser.add_argument('duration', choices=
-
         args = sub_cwnd.parse_args(shlex.split(args))
 
-        duration = self._compute_cycle_duration()
-
-        # TODO run simulation with args
-        sim = self._run_cycle(duration)
+        duration = self.compute_cycle_duration()
+        sim = self.run_cycle(duration)
 
         # duration = self._compute_cycle()
         # TODO s'il y a le spread, il faut relancer le processus d'optimisation avec la contrainte
@@ -299,35 +309,18 @@ class MpTcpNumerics(cmd.Cmd):
                 "Subflow congestion windows repartition that maximizes goodput", )
 
         pb.generate_lp_variables(sim.sender.subflows)
-        # res = pb.map_symbolic_to_lp_variables(sim.sender.bytes_sent, sim.receiver, )
-        # print("RES=\n",res)
-        # lp_tx, lp_subflows = res
 
-        # does it make sense to use Elastic Constraints ? that could help solve
-        # impossible cases
-        # upperBound =  self.config["receiver"]["rcv_buffer"]
-        # print("Upperbound=", upperBound)
-        # tab[SymbolNames.ReceiverWindow.value] = upperBound
-
-        # def translate_subflow_cwnd(sf):
-        #     # TODO we should use a boolean to know if it should be enforced or not
-        #     # if sf.cwnd_from_file:
-        #     #     return sf.cwnd_from_file
-        #     # else:
-        #     return pu.LpVariable(sym.name, lowBound=0, upBound=sf.cwnd_from_file, cat=pu.LpInteger )
-
-        # for sf in self.sender.subflows.values():
-        #     name = sf.sp_cwnd.name
-        #     tab.update({name:
-        #         # translate_subflow_cwnd(sf)
-        #         pu.LpVariable(name, lowBound=0, upBound=sf.cwnd_from_file, cat=pu.LpInteger )
-        #         })
 
         # bytes_sent is easy, it's like the last dsn
         # mptcp_throughput = lp_tx
         mptcp_throughput = sim.sender.bytes_sent
         # print("mptcp_throughput",  mptcp_throughput)
         pb.setObjective(mptcp_throughput)
+
+        # add constraints from the simulation
+        for constraint in sim.sender.constraints:
+            pb += constraint
+
 
         # ensure that subflow contribution is  at least % of total
         for sf_name, min_ratio in args.minratios:
@@ -370,8 +363,9 @@ class MpTcpNumerics(cmd.Cmd):
 
         # returned dictionary
         result = pb.generate_result()
+        # TODO here we should add some precisions, like MpTcpSubflow
+        # duration of the cycle !
         print(result)
-        # print("", pb.variablesDict())
         # # pb.constraints
         # result = {
         #         "status": pu.LpStatus[pb.status],
@@ -381,29 +375,10 @@ class MpTcpNumerics(cmd.Cmd):
         #         # "subflows": {},
         #         # "objective": pu.value(pb.objective)
         # }
-        # result.update(pb.variablesDict())
-
-        # si le statut est  mauvais, il devrait générer une erreur/excepetion
-        # LpStatusNotSolved
-
-        # once pb is solved, we can return the per-subflow throughput
-        # for sf_name, sf in self.receiver.subflows.items():
-        #     # cwnd/throughput/ratio
-        #     throughput = pu.value(sp_to_pulp(tab, sf["rx_bytes"]))
-        #     ratio = pu.value(throughput)/pu.value(mptcp_throughput)
-        #     cwnd = pu.value(pb.variablesDict()["cwnd_{%s}" % sf_name])
-        #     result = PerSubflowResult(cwnd,throughput,ratio)
-        #     ret["subflows"].update( { sf_name: result} )
-        #     # print("EXPR=", expr)
 
         # The status of the solution is printed to the screen
         print("Status:", pu.LpStatus[pb.status])
 
-        # ret["variables"] = pb.variablesDict()
-        # result.update(pb.variablesDict())
-        # Each of the variables is printed with it's resolved optimum value
-        # The optimised objective function value is printed to the screen
-        # print("Total Cost of Ingredients per can = ", value(pb.objective))
         return result
 
 
@@ -432,7 +407,7 @@ class MpTcpNumerics(cmd.Cmd):
 
     # TODO make it static
     # @staticmethod
-    def _run_cycle(self,
+    def run_cycle(self,
         # sender, receiver,
         duration,
         fainting_subflow=None,
