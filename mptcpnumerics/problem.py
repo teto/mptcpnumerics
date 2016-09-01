@@ -23,7 +23,6 @@ class MpTcpProblem(pu.LpProblem):
         :param rcv_buffer: might be the symbolic value or an integer
 
         """
-        # super().__init__("Finding minimum required buffer size", pu.LpMinimize)
         super().__init__(*args, **kwargs)
         # todo move rcv_buffer to
         # self.rcv_buffer = rcv_buffer
@@ -56,6 +55,7 @@ class MpTcpProblem(pu.LpProblem):
         if name in self.lp_variables_dict:
             raise ValueError("Already defined")
 
+        log.debug("Adding entry %s=%r" % (name, value))
         self.lp_variables_dict[name] = value
 
 
@@ -108,15 +108,19 @@ class MpTcpProblem(pu.LpProblem):
         # StrictLessThan or childof
         # if isinstance(other,sympy.core.relational.Unequality):
         # if isinstance(other, sp.relational.Relational):
+        log.debug("iadd: %r" % other)
+
         if self.is_sympy(other):
             # print("GOGOGO!:!!")
             # TODO use eval ?
             # other.rel_op # c l'operateur
             lconstraint = self.sp_to_pulp(other.lhs)
             rconstraint = self.sp_to_pulp(other.rhs)
+
+            log.debug("Lconstraint= %r" % rconstraint)
+            log.debug("Rconstraint=%r", rconstraint) # 'of type', type(rconstraint) )
             # do the same with rhs
             # print("constraint1=", lconstraint)
-            # print("constraint2=", rconstraint)
             # constructs an LpAffineExpression
             constraint = eval("lconstraint "+other.rel_op+ " rconstraint")
         else:
@@ -167,8 +171,8 @@ class MpTcpProblem(pu.LpProblem):
         translation_dict = self.lp_variables_dict
 
         # TODO pass another function to handle the case where symbols are actual values ?
-        print("free_symbols", expr.free_symbols)
-        print("translation_dict", translation_dict)
+        # print("free_symbols", expr.free_symbols)
+        # print("translation_dict", translation_dict)
         values = map(lambda x: translation_dict[x.name], expr.free_symbols)
         values = list(values)
         # print("values", )
@@ -239,8 +243,9 @@ class ProblemOptimizeBuffer(MpTcpProblem):
 
     def __init__(self, name):
         lp_rcv_wnd = pu.LpVariable(SymbolNames.ReceiverWindow.value, lowBound=0, cat=pu.LpInteger )
+        lp_rcv_wnd = pu.LpAffineExpression(lp_rcv_wnd)
 
-        self.add_mapping(SymbolNames.ReceiverWindow.value, lp_rcv_wnd)
+        # self.add_mapping(SymbolNames.ReceiverWindow.value, lp_rcv_wnd)
         # print("=====================", type(super()))
         super().__init__(lp_rcv_wnd, name, pu.LpMinimize)
         self.setObjective(lp_rcv_wnd)

@@ -195,7 +195,7 @@ class MpTcpNumerics(cmd.Cmd):
         sim = self.run_cycle(duration)
 
         # NOTE: this also sets the objective
-        pb = problem.MpTcpProblem("Finding minimum required buffer size", pu.LpMinimize)
+        pb = problem.ProblemOptimizeBuffer("Finding minimum required buffer size")
         # pb += lp_rcv_wnd, "Buffer size"
         # tab[SymbolNames.ReceiverWindow.value] = lp_rcv_wnd
         # for sf in self.sender.subflows.values():
@@ -210,8 +210,11 @@ class MpTcpNumerics(cmd.Cmd):
 
         # add constraints from the simulation
         for constraint in sim.sender.constraints:
-            print("CONS=", constraint)
-            pb += constraint
+            # lp_constraint = sp_to_pulp(tab, constraint.size) <= sp_to_pulp(tab, constraint.wnd)
+            print("Adding constraint: " , constraint)
+            print(" constraint.wnd: " , constraint.wnd, type(constraint.wnd))
+            lp_constraint = pb.sp_to_pulp(constraint.size) <= pb.sp_to_pulp(constraint.wnd)
+            pb += lp_constraint
 
         status = pb.solve()
         result = pb.generate_result()

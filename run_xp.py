@@ -130,10 +130,12 @@ def find_necessary_buffer(topology,  max_nb_of_subflows, output="buffer.csv"):
     with open(output, "w+") as rfd:
         writer = None
         for i in range(1, max_nb_of_subflows):
+            # todo add a new subflow to the config
             result = m.do_optbuffer("")
             if writer is None:
                 writer = csv.DictWriter(rfd, fieldnames=result.keys())
                 writer.writeheader() #
+            writer.writerow(result)
 
 
 if __name__ == '__main__':
@@ -143,4 +145,4 @@ if __name__ == '__main__':
     # iterate_over_fowd(topology0, "slow", 10)
     # os.system("cat " + output0)
 
-    find_necessary_buffer( "examples/mono.json", 4, output1)
+    find_necessary_buffer( "examples/mono.json", 2, output1)
