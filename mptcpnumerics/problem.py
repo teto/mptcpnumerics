@@ -48,11 +48,11 @@ class MpTcpProblem(pu.LpProblem):
         print("obj=", type(obj))
         super().setObjective(obj)
 
-    def add_mapping(self, name : str, value):
+    def add_mapping(self, name : str, value, warn_if_exists: bool = True):
         """
         Add mapping sympy -> pulp or integer
         """
-        if name in self.lp_variables_dict:
+        if warn_if_exists and name in self.lp_variables_dict:
             raise ValueError("Already defined")
 
         log.debug("Adding entry %s=%r" % (name, value))
@@ -69,29 +69,17 @@ class MpTcpProblem(pu.LpProblem):
         log.debug("Generating lp variables from subflows: %s" % subflows)
         # generate subflow specific variables
         for name, sf in subflows.items():
-            # name = sf.sp_cwnd.name
             # TODO set upBound later ? as a constraint
             lp_cwnd = pu.LpVariable(sf.sp_cwnd.name, lowBound=0, cat=pu.LpInteger)
-            # lp_mss = pu.LpVariable(sf.sp_mss.name, lowBound=0, cat=pu.LpInteger)
-            self.lp_variables_dict.update({
-                    # "cwnd": lp_cwnd,
-                    # "mss": lp_mss,
-                    lp_cwnd.name: lp_cwnd,
-                    sf.sp_mss.name: sf.mss, # hardcode mss
-                })
-            # self.lp_variables_dict["subflows"].update(
-            #     {
-            #         name : {
-            #             "cwnd": lp_cwnd,
-            #             "mss": lp_mss,
-            #         }
-            #     }
-            # )
+            self.add_mapping(lp_cwnd.name, lp_cwnd)
+            self.add_mapping(sf.sp_mss.name, sf.mss) # hardcoded mss
+            # self.lp_variables_dict.update({
+            #     lp_cwnd.name: lp_cwnd,
+            #     sf.sp_mss.name: sf.mss, 
+            # })
 
         # might be overriden later
-        # log.debug("Generated %s" % self.variablesDict())
         log.debug("Generated %s" % self.lp_variables_dict)
-        # tab.update({sf.sp_cwnd.name: sf.cwnd_from_file})
         # upBound=sf.cwnd_from_file,
 
 
@@ -171,38 +159,52 @@ class MpTcpProblem(pu.LpProblem):
         translation_dict = self.lp_variables_dict
 
         # TODO pass another function to handle the case where symbols are actual values ?
-        # print("free_symbols", expr.free_symbols)
-        # print("translation_dict", translation_dict)
         values = map(lambda x: translation_dict[x.name], expr.free_symbols)
         values = list(values)
-        # print("values", )
-        # print("type values[0]", type(values[0]))
-        # print("f", type(f), f(3,4))
         return f(*values)
 
 
-    def generate_result(self):
+    def generate_result(self, sim):
         """
         Should be called only once the problem got solved
+        Returns a dict that can be enriched
+
+        :param sim: Simulator
+
+        TODO add throughput, per subflow throughput etc...
         """
         # to be called with solve
         # todo add parameters of lp_variables_dict ?
+
+
+        # kind of problem
+        # self.subflows[p.subflow_id].rx_bytes += p.size
         result = {
                 "status": pu.LpStatus[self.status],
                 # "rcv_buffer": pb.variables()[SymbolNames.ReceiverWindow.value],
-                # "throughput": pu.value(mptcp_throughput),
+                "throughput": pu.value(self.sender.),
                 # a list ofs PerSubflowResult
                 # "subflows": {},
                 "objective": pu.value(self.objective)
         }
         # for key, var in self.variablesDict():
         for key, var in self.lp_variables_dict.items():
-            print("key/var", key, var)
+            # print("key/var", key, var)
             result.update({key: pu.value(var)})
 
+
+        # TODO add per subflow throughput
+        for name, sf in self.subflows.items():
+            print("key/var", key, var)
+
+            result.update({ sf.rx_bytes.name: pu.value(sf.rx_bytes)})
+            result.update({ sf.sp_tx.name: pu.value(sf.sp_tx)})
+
+        result.update({"duration": sim.time_limit })
+        # result.update({"duration": sim.time_limit })
         # result.update(self.variablesDict())
         # result.update(self.variablesDict())
-        print("result", result)
+        # print("result", result)
         # print("variable_dict", self.variablesDict())
         return result
 
@@ -250,9 +252,13 @@ class ProblemOptimizeBuffer(MpTcpProblem):
         super().__init__(lp_rcv_wnd, name, pu.LpMinimize)
         self.setObjective(lp_rcv_wnd)
 
-    # def generate_lp_variables(self, *args, **kwargs):
+    def generate_lp_variables(self, subflows, *args, **kwargs):
 
-    #     super().generate_lp_variables()
+        super().generate_lp_variables(subflows, *args, **kwargs)
+        for name, sf in subflows.items():
+            # TODO set upBound later ? as a constraint
+            # lp_cwnd = pu.LpVariable( lowBound=0, cat=pu.LpInteger)
+            self.add_mapping(sf.sp_cwnd.name, sf.cwnd_from_file, False)
 
 
     #     lp_rcv_wnd = pu.LpVariable(SymbolNames.ReceiverWindow.value, lowBound=0, cat=pu.LpInteger)

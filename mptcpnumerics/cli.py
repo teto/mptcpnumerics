@@ -67,6 +67,7 @@ def validate_config(d):
         d["subflows"][name] = subflow
     return d
 
+
 class MpTcpNumerics(cmd.Cmd):
     """
     Main class , an interpreter
@@ -144,8 +145,8 @@ class MpTcpNumerics(cmd.Cmd):
             # sy.add
 
 
-    def do_cycle(self, args):
-        return self.compute_cycle_duration()
+    # def do_cycle(self, args):
+    #     return self.compute_cycle_duration()
 
 
     def _max_fowd_and_max_bowd(self):
@@ -155,7 +156,8 @@ class MpTcpNumerics(cmd.Cmd):
         max_bowd = max(self.j["subflows"], key="bowd")
         return max_fowd + max_bowd
 
-    def compute_cycle_duration(self):
+
+    def compute_cycle_duration(self, minimum=None):
         """
         returns (approximate lcm of all subflows), (perfect lcm ?)
         """
@@ -168,7 +170,7 @@ class MpTcpNumerics(cmd.Cmd):
         # # lcm = last["f"] + last["b"]
         # for rtt in rtts:
         #     lcm = sp.lcm(rtt, lcm)
-        return lcm
+        return max(lcm, minimum)
         # sp.lcm(rtt)
 
     def do_optbuffer(self, args):
@@ -185,12 +187,22 @@ class MpTcpNumerics(cmd.Cmd):
         parser = argparse.ArgumentParser(
             description=('Congestion windows are fixed, given by topology:'
                 'gives the required buffered size to prevent head of line'
-                ' blocking depending on the scheduling')
+                ' blocking depending on the scheduling and on the congestion windows'
+                ' set in the topology file')
         )
+
+        parser.add_argument('--withstand-rto', nargs=1, action="append",
+            default=[],
+            metavar="SUBFLOW",
+            help=("Find a combination of congestion windows that can withstand "
+                " (continue to transmit) even under the worst RTO possible"
+                "")
+        )
+
         # TODO add options to accomodate RTO
         args = parser.parse_args(shlex.split(args))
 
-
+        # TODO set a minimum if rto
         duration = self.compute_cycle_duration()
         sim = self.run_cycle(duration)
 
@@ -213,13 +225,14 @@ class MpTcpNumerics(cmd.Cmd):
             # lp_constraint = sp_to_pulp(tab, constraint.size) <= sp_to_pulp(tab, constraint.wnd)
             print("Adding constraint: " , constraint)
             print(" constraint.wnd: " , constraint.wnd, type(constraint.wnd))
+            # HACK ideally my fork should automatically convert toa pulp constraint but that does not work
             lp_constraint = pb.sp_to_pulp(constraint.size) <= pb.sp_to_pulp(constraint.wnd)
             pb += lp_constraint
 
         status = pb.solve()
         result = pb.generate_result()
         # mptcp_throughput = sp_to_pulp(tab, self.sender.bytes_sent)
-
+        result.update({"duration": duration})
 
         print("Status:", pu.LpStatus[pb.status])
 
@@ -274,7 +287,7 @@ class MpTcpNumerics(cmd.Cmd):
                 "Expects 2 arguments: subflow name followed by its ratio (<1)")
         )
 
-        sub_cwnd.add_argument('--nohol', nargs=1, action="append",
+        sub_cwnd.add_argument('--withstand-rto', nargs=1, action="append",
             default=[],
             metavar="SUBFLOW",
             help=("Find a combination of congestion windows that can withstand "
@@ -365,7 +378,8 @@ class MpTcpNumerics(cmd.Cmd):
         pb.solve()
 
         # returned dictionary
-        result = pb.generate_result()
+        result = pb.generate_result(sim)
+        # result.update({"duration": duration})
         # TODO here we should add some precisions, like MpTcpSubflow
         # duration of the cycle !
         print(result)
@@ -409,6 +423,7 @@ class MpTcpNumerics(cmd.Cmd):
 
 
     # TODO make it static
+    # TODO pass an initial amount of data rather than a time limit ?
     # @staticmethod
     def run_cycle(self,
         # sender, receiver,
@@ -419,7 +434,8 @@ class MpTcpNumerics(cmd.Cmd):
         Creates a sender and a receiver (from a topology file ?)
 
         Params:
-            fainting_subflow (str)
+            fainting_subflow (str) the fainting subflow sends a cwnd first, then is disabled
+            to simulate an RTO. The duration parameter should be passed accordlingly
 
         Returns:
             Simulator
@@ -469,8 +485,10 @@ class MpTcpNumerics(cmd.Cmd):
             #     sim.stop ( fainting_subflow.rto() )
             #     continue
             if sf == fainting_subflow:
+                # TODO registers an event that unblocks this subflow
                 log.debug("Mimicking an RTO => Needs to drop this pkt")
-                sim.stop (fainting_subflow.rto())
+                # duration should be set accordingly !
+                # sim.stop (fainting_subflow.rto())
                 continue
             sim.add(pkt)
 

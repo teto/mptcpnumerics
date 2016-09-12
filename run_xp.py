@@ -8,7 +8,7 @@ import csv
 import os
 
 log = logging.getLogger("mptcpnumerics")
-log.setLevel(logging.DEBUG)
+log.setLevel(logging.CRITICAL)
 streamHandler = logging.StreamHandler()
 # %(asctime)s - %(name)s - %
 # formatter = logging.Formatter('%(levelname)s - %(message)s')
@@ -63,8 +63,7 @@ def iterate_over_fowd(topology, sf_name: str, step: int):
     with open(output0, "w+") as rfd:
 
         # we need to make a copy of the dict
-        toto = m.config = copy.deepcopy(j) # dict(j)
-        #
+        toto = m.config = copy.deepcopy(j)
 
         # skips do_load_from_file to
         print("current config", j)
@@ -107,7 +106,11 @@ def iterate_over_fowd(topology, sf_name: str, step: int):
 # j["subflows"]["slow"]["fowd"]
 
 
-def find_necessary_buffer(topology,  max_nb_of_subflows, output="buffer.csv"):
+def find_necessary_buffer(
+    topology, # topologies
+    max_nb_of_subflows,
+    output="buffer.csv"
+    ):
     """
     Add a subflow identical to the first several times 'till max_nb_of_subflows
     - with parameters to overcome an RTO
@@ -115,6 +118,7 @@ def find_necessary_buffer(topology,  max_nb_of_subflows, output="buffer.csv"):
     subflow must contain
     """
     m = MpTcpNumerics()
+    # for topology in topologies:
     with open(topology) as cfg_fd:
         # you can use object_hook to check that everything is in order
         j = json.load(cfg_fd, ) # object_hook=validate_config)
@@ -124,18 +128,36 @@ def find_necessary_buffer(topology,  max_nb_of_subflows, output="buffer.csv"):
     print(j)
 
     j = m.do_load_from_file(topology)
+
     assert( "default" in m.subflows )
 
 
+    # m.config = copy.deepcopy(j)
+
     with open(output, "w+") as rfd:
         writer = None
-        for i in range(1, max_nb_of_subflows):
+        for i in range(1, max_nb_of_subflows + 1):
+            print("Run with %d subflows " % i)
             # todo add a new subflow to the config
-            result = m.do_optbuffer("")
+
+            # first run on a normal cycle
+            cmd = ""
+            result = m.do_optbuffer(cmd)
+            result.update({"name": "simple"})
             if writer is None:
                 writer = csv.DictWriter(rfd, fieldnames=result.keys())
                 writer.writeheader() #
             writer.writerow(result)
+
+
+            # second run try
+            cmd= " --withstand-rto default"
+            result = m.do_optbuffer(cmd)
+            result.update({"name": "withstand rto"})
+
+            writer.writerow(result)
+
+            m.config["subflows"].update( { "default_%d" % i: copy.deepcopy(m.subflows["default"]) })
 
 
 if __name__ == '__main__':
