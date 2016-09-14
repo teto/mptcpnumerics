@@ -7,16 +7,10 @@ import pprint
 import json
 import sympy as sp
 from enum import Enum
-from . import generate_cwnd_name, generate_mss_name, rto
-from .analysis import *
+from . import generate_cwnd_name, generate_mss_name, rto, SubflowState
+from .analysis import SenderEvent
 
 log = logging.getLogger(__name__)
-
-class State(Enum):
-    Available = 0 
-    RTO =  1
-    WaitingAck = 2
-
 class MpTcpSubflow:
     """
     @author Matthieu Coudron
@@ -68,7 +62,7 @@ class MpTcpSubflow:
 
         # TODO
         # self.inflight = False
-        self.state = State.Available
+        self._state = SubflowState.Available
         """
         This is a pretty crude simulator: it considers that all packets are sent
         at once, hence this boolean tells if the window is inflight
@@ -87,9 +81,25 @@ class MpTcpSubflow:
         self.loss_rate = loss
         """Unused"""
 
+    @property
+    def state(self):
+        return self._state
+
+    @state.setter
+    def state(self, val : SubflowState):
+        """
+        """
+
+        if val == SubflowState.RTO:
+            assert self.state == SubflowState.RTO
+        self._state = val
+
     def can_send(self) -> bool:
         """
+        Ret:
+            True if subflow is available
         """
+        return self.state == SubflowState.Available
 
     def to_csv(self):
         return {
@@ -106,7 +116,7 @@ class MpTcpSubflow:
         """
         true if a window of packet is in flight
         """
-        return self.state != State.Available
+        return self.state != SubflowState.Available
 
 
     def rto(self):
@@ -145,7 +155,7 @@ class MpTcpSubflow:
         """
         Generates a packet with a full cwnd
         """
-        assert self.inflight == False
+        assert self.state == SubflowState.Available
 
         e = SenderEvent(self.name)
         e.delay = self.fowd

@@ -474,24 +474,13 @@ class MpTcpNumerics(cmd.Cmd):
         ordered_subflows = sorted(self.subflows.values(), key=lambda x: x.fowd, reverse=True)
 
         # global current_time
-        # current_time = 0
+        # here we just setup the system
         for sf in ordered_subflows:
 
             # ca genere des contraintes
             # pkt = sf.generate_pkt(0, sender.snd_next)
-            if sf.can_send():
 
-            pkt = sender.send_on_subflow(sf.name)
-            # if fainting_subflow and sf == fainting_subflow:
-            #     log.debug("Mimicking an RTO => Needs to drop this pkt")
-            #     sim.stop ( fainting_subflow.rto() )
-            #     continue
-            if sf == fainting_subflow:
-                # TODO registers an event that unblocks this subflow
-                log.debug("Mimicking an RTO => Needs to drop this pkt")
-                # duration should be set accordingly !
-                # sim.stop (fainting_subflow.rto())
-                continue
+            pkt = sender.send_on_subflow(sf.name, trigger_rto= (sf == fainting_subflow))
             sim.add(pkt)
 
         sim.stop(duration)
@@ -644,7 +633,7 @@ def run():
     args, unknown_args = parser.parse_known_args(sys.argv[1:])
 
     # logging.CRITICAL = 50
-    level = logging.CRITICAL - args.debug * 10
+    level = logging.CRITICAL - min(4,args.debug) * 10
     # log.setLevel(level)
     # print("Log level set to %s " % logging.getLevelName(level))
 

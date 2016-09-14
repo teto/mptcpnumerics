@@ -8,19 +8,14 @@
 
 from enum import Enum, IntEnum
 import sympy as sp
-import argparse
-import json
 # import sympy as sy
-import cmd
-import sys
 import logging
 from collections import namedtuple
 import sortedcontainers
 import pulp as pu
 import pprint
-import shlex
-from . import topology
-from . import problem
+from . import SubflowState
+# from . import problem
 
 log = logging.getLogger("mptcpnumerics")
 log.setLevel(logging.DEBUG)
@@ -243,13 +238,13 @@ class Event:
     As it is
     """
 
-    def __init__(self, sf_id, direction, **args):
+    def __init__(self, sf_id, **args):
         """
         special a list of optional features listed in EventFeature
         Either set 'delay' (respective) or 'time' (absolute scheduled time)
         direction => destination of the packet TODO rename
         """
-        self.direction = direction
+        # self.direction = direction
         self.time = None
         self.subflow_id = sf_id
         self.delay = None
@@ -259,7 +254,7 @@ class Event:
     def __str__(self):
         return "Scheduled at {s.time} dest={dest}".format(
             s=self,
-            dest="sender" if self.direction == Direction.Sender else "Receiver",
+            dest="??" # if self.direction == Direction.Sender else "Receiver",
         )
 
 
@@ -269,7 +264,7 @@ class SenderEvent(Event):
         :param dsn in bytes
         :param size in bytes
         """
-        super().__init__(sf_id, Direction.Receiver)
+        super().__init__(sf_id, )
         self.dsn = None
         self.size = None
 
@@ -278,6 +273,10 @@ class SenderEvent(Event):
         res += " dsn={s.dsn} size={s.size}".format( s=self)
         return res
 
+class EventStopRTO(SenderEvent):
+    # def __init__()
+    pass
+
 # @froze_it
 class ReceiverEvent(Event):
 
@@ -285,7 +284,7 @@ class ReceiverEvent(Event):
         """
         :param blocks Out of order blocks as in SACK
         """
-        super().__init__(sf_id, Direction.Sender)
+        super().__init__(sf_id, ) #Direction.Sender)
 
         self.dack = None
         self.rcv_wnd = None
@@ -350,9 +349,12 @@ class MpTcpSender:
         self._snd_next = value
 
     def inflight(self):
+        """
+        total number of bytes inflight
+        """
         inflight = 0
         for sf_id, sf in self.subflows.items():
-            if sf.inflight == True:
+            if sf.state == SubflowState.WaitingAck:
                 inflight += sf.sp_cwnd
         # sum(filter(lambda x: x.cwnd if x.inflight), self.subflows)
         return inflight
@@ -384,18 +386,21 @@ class MpTcpSender:
         # TODO depends on self.scheduler ?
         packets = []
         for name, sf in self.subflows.items():
-            if not sf.busy():
+            # if not sf.busy():
+            if sf.can_send():
                 pkt = self.send_on_subflow(name)
                 packets.append(pkt)
 
         return packets
 
-    def send_on_subflow(self, sf_id):
+    def send_on_subflow(self, sf_id, trigger_rto: bool = False):
         """
         Sender.
         rely on MpTcpSubflow:generate_pkt function
         """
         assert self.subflows[sf_id].busy() == False
+
+        log.debug("Sending on subflow [sf_id]")
 
         available_window = self.available_window()
         dsn = self.snd_nxt()
@@ -404,6 +409,16 @@ class MpTcpSender:
         self.bytes_sent += pkt.size
 
         self.add_flow_control_constraint(pkt.size, available_window)
+
+
+        if trigger_rto:
+            # TODO registers an event that unblocks this subflow
+            log.debug("Mimicking an RTO => Needs to drop this pkt")
+            e = EventStopRTO(fainting_subflow) 
+            e.delay = self.subflows[sf_id].rto()
+            # Don't return the pkt, it looks lost
+            return e
+
         return pkt
 
     #     # a
@@ -441,7 +456,13 @@ class MpTcpSender:
         log.debug("Sender received packet %s" % p)
 
 
+        # rto on that subflow 
+        if isinstance(p, EventStopRTO):
+            sf = self.subflows[p.subflow_id]
+            self.subflows[p.subflow_id].state = SubflowState.Available
 
+
+        # TODO
         print ("comparing %s (dack) > %s (una) => result = %s " % (p.dack, self.snd_una, p.dack > self.snd_una ))
 
 #   // Test for conditions that allow updating of the window
@@ -473,9 +494,10 @@ class MpTcpSender:
         # cwnd
         return self.send()
 
-class Direction(Enum):
-    Receiver = 0
-    Sender = 1
+
+# class Direction(Enum):
+#     Receiver = 0
+#     Sender = 1
 
 
 OutOfOrderBlock = namedtuple('OutOfOrderBlock', ['dsn', 'size'])
@@ -817,17 +839,19 @@ by rcv_window
 
             log.debug("%d: running event %r" % (self.current_time, e))
             # events emitted by host
-            pkts = []
-            if e.direction == Direction.Receiver:
-                pkts = self.receiver.recv(e)
-            elif e.direction == Direction.Sender:
-                pkts = self.sender.recv(e)
+            new_events = []
+            if isinstance(e, ReceiverEvent):
+                new_events = self.receiver.recv(e)
+            # elif isinstance(e, EventStopRTO):
+            #     self.sender.subflows[e.sf_id].State = 
+            elif isinstance(e, SenderEvent):
+                new_events = self.sender.recv(e)
             else:
                 raise Exception("wrong direction")
 
-            print(pkts)
-            if pkts:
-                for p in pkts:
+            print(new_events)
+            if new_events:
+                for p in new_events:
                     self.add(p)
             else:
                 log.error("No pkt sent by either receiver or sender")

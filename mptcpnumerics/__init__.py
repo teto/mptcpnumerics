@@ -16,4 +16,9 @@ def rto(rtt, svar):
     return rtt + 4 * svar
 
 
+class SubflowState(Enum):
+    Available = 0 
+    RTO =  1
+    WaitingAck = 2
+
 # __all__ = ['generate_cwnd_name']
