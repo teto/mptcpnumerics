@@ -157,7 +157,7 @@ class MpTcpNumerics(cmd.Cmd):
         return max_fowd + max_bowd
 
 
-    def compute_cycle_duration(self, minimum=None):
+    def compute_cycle_duration(self, minimum=0):
         """
         returns (approximate lcm of all subflows), (perfect lcm ?)
         """
@@ -230,7 +230,7 @@ class MpTcpNumerics(cmd.Cmd):
             pb += lp_constraint
 
         status = pb.solve()
-        result = pb.generate_result()
+        result = pb.generate_result(sim)
         # mptcp_throughput = sp_to_pulp(tab, self.sender.bytes_sent)
         result.update({"duration": duration})
 
@@ -328,8 +328,8 @@ class MpTcpNumerics(cmd.Cmd):
 
 
         # bytes_sent is easy, it's like the last dsn
-        # mptcp_throughput = lp_tx
-        mptcp_throughput = sim.sender.bytes_sent
+        # mptcp_throughput = sim.sender.bytes_sent
+        mptcp_throughput = sim.receiver.rcv_next
         # print("mptcp_throughput",  mptcp_throughput)
         pb.setObjective(mptcp_throughput)
 
@@ -479,6 +479,8 @@ class MpTcpNumerics(cmd.Cmd):
 
             # ca genere des contraintes
             # pkt = sf.generate_pkt(0, sender.snd_next)
+            if sf.can_send():
+
             pkt = sender.send_on_subflow(sf.name)
             # if fainting_subflow and sf == fainting_subflow:
             #     log.debug("Mimicking an RTO => Needs to drop this pkt")

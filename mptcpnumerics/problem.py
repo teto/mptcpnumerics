@@ -75,7 +75,7 @@ class MpTcpProblem(pu.LpProblem):
             self.add_mapping(sf.sp_mss.name, sf.mss) # hardcoded mss
             # self.lp_variables_dict.update({
             #     lp_cwnd.name: lp_cwnd,
-            #     sf.sp_mss.name: sf.mss, 
+            #     sf.sp_mss.name: sf.mss,
             # })
 
         # might be overriden later
@@ -175,14 +175,17 @@ class MpTcpProblem(pu.LpProblem):
         """
         # to be called with solve
         # todo add parameters of lp_variables_dict ?
-
+        duration = sim.time_limit
 
         # kind of problem
         # self.subflows[p.subflow_id].rx_bytes += p.size
+        # print("RCV_NEXT=", sim.receiver.rcv_next)
+        # print("RCV_NEXT=", self.sp_to_pulp(sim.receiver.rcv_next))
         result = {
                 "status": pu.LpStatus[self.status],
                 # "rcv_buffer": pb.variables()[SymbolNames.ReceiverWindow.value],
-                "throughput": pu.value(self.sender.),
+                # sp_to_pulp
+                "throughput":  self.sp_to_pulp(sim.receiver.rcv_next)/ duration,
                 # a list ofs PerSubflowResult
                 # "subflows": {},
                 "objective": pu.value(self.objective)
@@ -194,13 +197,13 @@ class MpTcpProblem(pu.LpProblem):
 
 
         # TODO add per subflow throughput
-        for name, sf in self.subflows.items():
+        for name, sf in sim.sender.subflows.items():
             print("key/var", key, var)
 
-            result.update({ sf.rx_bytes.name: pu.value(sf.rx_bytes)})
-            result.update({ sf.sp_tx.name: pu.value(sf.sp_tx)})
+            result.update({ "rx_bytes": self.sp_to_pulp(sf.rx_bytes)})
+            # result.update({ "tx": self.sp_to_pulp(sf.sp_tx)})
 
-        result.update({"duration": sim.time_limit })
+        result.update({"duration": duration })
         # result.update({"duration": sim.time_limit })
         # result.update(self.variablesDict())
         # result.update(self.variablesDict())

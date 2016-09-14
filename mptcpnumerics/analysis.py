@@ -304,6 +304,13 @@ class ReceiverEvent(Event):
 class MpTcpSender:
     """
     By definition of the simulator, a cwnd is either fully outstanding or empty
+
+
+    Attributes:
+        snd_una:
+        subflows: is a dict( subflow_name, MpTcpSubflow)
+        _snd_next: Next #seq to send
+        rcv_wnd: 
     """
     # subflow congestion windows
     # need to have dsn, cwnd, outstanding ?
@@ -311,24 +318,18 @@ class MpTcpSender:
     # TODO maintain statistics about the events and categorize them by HOLTypes
     def __init__(self, rcv_wnd, snd_buffer, subflows, scheduler):
         """
-        :param rcv_wnd is a sympy symbol
-        self.subflows is a dict( subflow_name, MpTcpSubflow)
+        Args:
+            rcv_wnd: is a sympy symbol
+            snd_buf_max: Maximum size of the buffer
+
         """
         # what if we leave it unconstrained ?
-        self.snd_buf_max = snd_buffer # config["sender"]["snd_buffer"]
-        """Maximum size of the buffer
-        TODO: might be replaced by a sympy symbol depending on problem ?
-        """
+        self.snd_buf_max = snd_buffer 
 
-        self.scheduler = scheduler
-
-        self._snd_next = 0    # left edge of the window/dsn (rename to snd_una ?)
-        """ Next #seq to send"""
-
+        self.scheduler = scheduler 
+        self._snd_next = 0    # left edge of the window/dsn (rename to snd_una ?) 
         self.snd_una = 0
-        """Unacknowledged """
         self.rcv_wnd = rcv_wnd
-        """Receive window"""
 
         self.bytes_sent = 0
         """Bytes sent at the mptcp level, i.e., different bytes"""
@@ -348,12 +349,6 @@ class MpTcpSender:
         log.debug("UPDATE snd_next to %s", value)
         self._snd_next = value
 
-    # def __setattr__(self, name, value):
-    #     if name == "snd_next":
-
-    #     self.__dict__[name] = value
-
-    # rename to inflight
     def inflight(self):
         inflight = 0
         for sf_id, sf in self.subflows.items():
@@ -370,10 +365,7 @@ class MpTcpSender:
         """
         returns snd_next
         """
-        # max(iterable, *[, key, default])
-        # max(arg1, arg2, *args[, key])
         return self.snd_next
-        # return max(self.subflows, "dsn", 0)
 
     def add_flow_control_constraint(self, size, available_window):
         """
@@ -403,10 +395,6 @@ class MpTcpSender:
         Sender.
         rely on MpTcpSubflow:generate_pkt function
         """
-        # e = SenderEvent()
-        # sf = self.subflows[sf_id]
-        # e.time = current_time + sf["f"]
-        # e.subflow_id = sf_id
         assert self.subflows[sf_id].busy() == False
 
         available_window = self.available_window()
@@ -684,10 +672,11 @@ Hypotheses made in this simulator:
 by rcv_window
 
 
-TODO:
--use a framework to trace some variables (save into a csv for instance)
--support NR-sack
--rename cwnd to max_cwnd
+    Todo:
+        -use a framework to trace some variables (save into a csv for instance)
+        -support NR-sack
+        -rename cwnd to max_cwnd
+
     You should start feeding some packets/events (equivalent in this simulator)
     with the "add" method.
     You may also choose a time limit at which to "stop()" the simulator or alternatively wait
@@ -695,8 +684,9 @@ TODO:
 
     Once the scenario, is correctly setup, call "run" and let the magic happens !
 
-    :ivar time_limit Ploppyboulba
-    :ivar receiver Ploppyboulba
+    Attributes:
+        time_limit (int): Ploppyboulba
+        receiver (MpTcpReceiver): Ploppyboulba
 
     """
 # TODO when possible move it to
@@ -706,7 +696,7 @@ TODO:
     def __init__(self, config, sender : MpTcpSender, receiver : MpTcpReceiver):
         """
         current_time is set to the time of the current event
-        :param sender ok
+
         Args:
             Sender (MpTcpSender):  a sender
 
@@ -715,7 +705,6 @@ TODO:
         """
         self.config = config
         self.sender = sender
-        """Sender MpTcpSender"""
         self.receiver = receiver
         # http://www.grantjenks.com/docs/sortedcontainers/sortedlistwithkey.html#id1
         self.events = sortedcontainers.SortedListWithKey(key=lambda x: x.time)

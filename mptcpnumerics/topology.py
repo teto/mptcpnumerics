@@ -6,15 +6,30 @@ import logging
 import pprint
 import json
 import sympy as sp
-from . import generate_cwnd_name, generate_mss_name
+from enum import Enum
+from . import generate_cwnd_name, generate_mss_name, rto
 from .analysis import *
 
 log = logging.getLogger(__name__)
 
+class State(Enum):
+    Available = 0 
+    RTO =  1
+    WaitingAck = 2
 
 class MpTcpSubflow:
     """
     @author Matthieu Coudron
+
+    Attributes:
+        name (str): Identifier of the subflow
+        cwnd: careful, there are 2 variables here, one symbolic, one a hard value
+        sp_cwnd: symbolic congestion window
+        sp_mss: symbolic Maximum Segment Size
+        mss: hardcoded mss from topology file
+        sp_tx:  Symbolic) Sent bytes
+        rx_bytes:(Symbolic) Received bytes
+
     """
 
     def __init__(self,
@@ -25,12 +40,8 @@ class MpTcpSubflow:
         """
         In this simulator, the cwnd is considered as constant, at its maximum.
         Hence the value given here will remain
-        :param cwnd careful, there are 2 variables here, one symbolic, one a hard value
-        :param sp_cwnd symbolic congestion window
-        :param sp_mss symbolic Maximum Segment Size
-        :ivar
 
-        # :param contribution computed by receiver
+
         """
         # self.sender = sender
             # loaded_cwnd = sf_dict.get("cwnd", self.rcv_wnd)
@@ -46,21 +57,18 @@ class MpTcpSubflow:
         # sp.refine(self.sp_cwnd, sp.Q.positive(upper_bound - self.sp_cwnd))
 
         self.sp_mss = sp.Symbol(generate_mss_name(name), positive=True)
-        """ Symbolic Maximum Segment Size """
         self.mss = mss
-        """Integer value """
         self.sp_tx = 0
-        """(Symbolic) Sent bytes"""
         self.rx_bytes = 0
-        """(Symbolic) Received bytes"""
 
         # self.mss = mss
         print("%r" % self.sp_cwnd)
 
         self.name = name
-        """Identifier of the subflow"""
 
-        self.inflight = False
+        # TODO
+        # self.inflight = False
+        self.state = State.Available
         """
         This is a pretty crude simulator: it considers that all packets are sent
         at once, hence this boolean tells if the window is inflight
@@ -79,6 +87,10 @@ class MpTcpSubflow:
         self.loss_rate = loss
         """Unused"""
 
+    def can_send(self) -> bool:
+        """
+        """
+
     def to_csv(self):
         return {
             "fowd": self.fowd,
@@ -94,7 +106,7 @@ class MpTcpSubflow:
         """
         true if a window of packet is in flight
         """
-        return self.inflight
+        return self.state != State.Available
 
 
     def rto(self):
