@@ -18,15 +18,6 @@ from . import SubflowState
 # from . import problem
 
 log = logging.getLogger("mptcpnumerics")
-log.setLevel(logging.DEBUG)
-streamHandler = logging.StreamHandler()
-# %(asctime)s - %(name)s - %
-formatter = logging.Formatter('%(levelname)s - %(message)s')
-streamHandler.setFormatter(formatter)
-log.addHandler(streamHandler)
-fileHdl = logging.FileHandler("log",mode="w")
-fileHdl.setFormatter(formatter)
-log.addHandler(fileHdl)
 
 
 constraint_types = [
@@ -330,8 +321,8 @@ class MpTcpSender:
         self.snd_una = 0
         self.rcv_wnd = rcv_wnd
 
-        self.bytes_sent = 0
-        """Bytes sent at the mptcp level, i.e., different bytes"""
+        # self.bytes_sent = 0
+        # """total bytes sent at the mptcp level, i.e., different bytes"""
         self.constraints = []
         """Constraints (head of line blocking, flow control) are saved with sympy symbols. """
 
@@ -363,12 +354,6 @@ class MpTcpSender:
         # min(self.snd_buf_max, self.rcv_wnd)
         return self.rcv_wnd - self.inflight()
 
-    def snd_nxt(self):
-        """
-        returns snd_next
-        """
-        return self.snd_next
-
     def add_flow_control_constraint(self, size, available_window):
         """
         Register flow control constraints so that it can be added later to
@@ -390,34 +375,54 @@ class MpTcpSender:
             if sf.can_send():
                 pkt = self.send_on_subflow(name)
                 packets.append(pkt)
+            else:
+                log.debug("can't send on subflow")
 
         return packets
 
-    def send_on_subflow(self, sf_id, trigger_rto: bool = False):
+
+    # def retransmit(self, sf_id, dsn):
+
+    def enter_rto(self, sf_id, dsn):
+        """
+        generates an event so that "dsn" can be retransmitted
+        """
+
+        # TODO registers an event that unblocks this subflow
+        log.debug("Mimicking an RTO => Needs to drop this pkt")
+        e = EventStopRTO(sf_id) 
+        e.dsn = dsn
+        e.delay = self.subflows[sf_id].rto()
+        self.subflows[sf_id].state = SubflowState.RTO
+        return e
+
+    def send_on_subflow(self, sf_id, retransmit_dsn=None, ): 
         """
         Sender.
         rely on MpTcpSubflow:generate_pkt function
         """
-        assert self.subflows[sf_id].busy() == False
+        print("subflow state", self.subflows[sf_id].state)
 
-        log.debug("Sending on subflow [sf_id]")
+        log.debug("Sending on subflow [%s]" % sf_id)
 
-        available_window = self.available_window()
-        dsn = self.snd_nxt()
-        pkt = self.subflows[sf_id].generate_pkt(dsn)
-        self.snd_next += pkt.size
-        self.bytes_sent += pkt.size
+        retransmit = True if retransmit_dsn is not None else False
+        if retransmit:
+            log.debug("Retransmitting dsn %s" % retransmit_dsn)
 
-        self.add_flow_control_constraint(pkt.size, available_window)
+            assert self.subflows[sf_id].state == SubflowState.RTO
+            self.subflows[sf_id].state = SubflowState.Available
+            dsn = retransmit_dsn
+            pkt = self.subflows[sf_id].generate_pkt(dsn)
+        else:
+            assert self.subflows[sf_id].state == SubflowState.Available
+            dsn = self.snd_next
+            pkt = self.subflows[sf_id].generate_pkt(dsn)
+            self.snd_next += pkt.size
+            # max(self.snd_next + pkt.size, self.snd_next)
 
+            available_window = self.available_window()
+            self.add_flow_control_constraint(pkt.size, available_window)
 
-        if trigger_rto:
-            # TODO registers an event that unblocks this subflow
-            log.debug("Mimicking an RTO => Needs to drop this pkt")
-            e = EventStopRTO(fainting_subflow) 
-            e.delay = self.subflows[sf_id].rto()
-            # Don't return the pkt, it looks lost
-            return e
 
         return pkt
 
@@ -448,19 +453,21 @@ class MpTcpSender:
 
     def recv(self, p):
         """
-        Sender.
+        Can only receive ack
+
         Process acks
         pass a bool or function to choose how to increase cwnd ?
         needs to return a list
         """
-        log.debug("Sender received packet %s" % p)
+        log.debug("Sender received packet %r %s " % (p, type(p)))
 
 
         # rto on that subflow 
         if isinstance(p, EventStopRTO):
-            sf = self.subflows[p.subflow_id]
-            self.subflows[p.subflow_id].state = SubflowState.Available
-
+            raise Exception("FIX THIS")
+            # sf = self.subflows[p.subflow_id]
+            # self.subflows[p.subflow_id].state = SubflowState.Available
+            # return self.send_on_subflow(sf.name, p.dsn)
 
         # TODO
         print ("comparing %s (dack) > %s (una) => result = %s " % (p.dack, self.snd_una, p.dack > self.snd_una ))
@@ -639,7 +646,7 @@ class MpTcpReceiver:
         packets = []
 
         headSeq = p.dsn
-        tailSeq = p.dsn + p.size
+        # tailSeq = p.dsn + p.size
 
         # if tailSeq > self.right_edge():
         #     tailSeq = self.right_edge()
@@ -763,7 +770,7 @@ by rcv_window
         if p.delay is not None:
             p.time = self.current_time + p.delay
 
-        assert p.time >= self.current_time
+        assert p.time >= self.current_time, "Event in the past !!"
 
         if self.time_limit and self.current_time > self.time_limit:
             print("Can't register an event after simulation limit ! Break out of the loop")
@@ -836,16 +843,21 @@ by rcv_window
             # if self.time_limit and self.current_time > self.time_limit:
             #     print("Duration of simulation finished ! Break out of the loop")
             #     break
+            if self.time_limit and self.current_time >= self.time_limit:
+                log.debug("Aborting simulation because reached time limit %d" % self.time_limit)
+                break
 
             log.debug("%d: running event %r" % (self.current_time, e))
             # events emitted by host
             new_events = []
             if isinstance(e, ReceiverEvent):
-                new_events = self.receiver.recv(e)
-            # elif isinstance(e, EventStopRTO):
-            #     self.sender.subflows[e.sf_id].State = 
+                new_events += self.sender.recv(e)
+            elif isinstance(e, EventStopRTO):
+                new_events.append(self.sender.send_on_subflow(e.subflow_id, e.dsn))
+                # now that the rto ends
+                new_events += self.sender.send()
             elif isinstance(e, SenderEvent):
-                new_events = self.sender.recv(e)
+                new_events += self.receiver.recv(e)
             else:
                 raise Exception("wrong direction")
 
@@ -857,6 +869,11 @@ by rcv_window
                 log.error("No pkt sent by either receiver or sender")
 
         self.finished = True
+
+        # disabled when abrut end of simulation
+        # assert len(self.receiver.out_of_order) == 0, "Still out of order packets "
+        # assert self.receiver.rcv_next == self.sender.snd_next, "Everything received"
+
         # constraints = []
         # self.sender.constraints()
         # return constraints

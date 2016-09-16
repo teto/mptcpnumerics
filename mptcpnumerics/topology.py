@@ -7,7 +7,7 @@ import pprint
 import json
 import sympy as sp
 from enum import Enum
-from . import generate_cwnd_name, generate_mss_name, rto, SubflowState
+from . import generate_rx_name, generate_cwnd_name, generate_mss_name, rto, SubflowState
 from .analysis import SenderEvent
 
 log = logging.getLogger(__name__)
@@ -23,6 +23,7 @@ class MpTcpSubflow:
         mss: hardcoded mss from topology file
         sp_tx:  Symbolic) Sent bytes
         rx_bytes:(Symbolic) Received bytes
+        _state : if packets are inflight or if it is timing out
 
     """
 
@@ -53,7 +54,7 @@ class MpTcpSubflow:
         self.sp_mss = sp.Symbol(generate_mss_name(name), positive=True)
         self.mss = mss
         self.sp_tx = 0
-        self.rx_bytes = 0
+        self.rx_bytes = sp.Symbol(generate_rx_name(name), positive=True)
 
         # self.mss = mss
         print("%r" % self.sp_cwnd)
@@ -89,9 +90,11 @@ class MpTcpSubflow:
     def state(self, val : SubflowState):
         """
         """
-
-        if val == SubflowState.RTO:
-            assert self.state == SubflowState.RTO
+        # if val == SubflowState.RTO:
+        #     assert self.state == SubflowState.RTO
+        # if val == SubflowState.WaitingAck:
+        #     assert self.state == SubflowState.Available or 
+        log.debug("State moving from %s to %s" % (self._state.name, val.name))
         self._state = val
 
     def can_send(self) -> bool:
@@ -108,7 +111,7 @@ class MpTcpSubflow:
         }
 
     def __str__(self):
-        return "Id={s.name} Rtt={s.fowd}+{s.bowd} inflight={s.outstanding}".format(
+        return "Id={s.name} Rtt={s.fowd}+{s.bowd} state={s.state}".format(
             s=self
         )
 
@@ -125,6 +128,7 @@ class MpTcpSubflow:
         """
         return rto (self.rtt, self.svar)
 
+    @property
     def rtt(self):
         """
         Returns constant Round Trip Time
@@ -148,7 +152,7 @@ class MpTcpSubflow:
         # self.una += self.sp_cwnd
         assert self.busy() == True
         self.increase_window()
-        self.inflight = False
+        self.state = SubflowState.Available
 
 
     def generate_pkt(self, dsn, ):
@@ -163,11 +167,9 @@ class MpTcpSubflow:
         e.dsn  = dsn
         e.size = self.sp_cwnd * self.sp_mss
 
-        print("packet size %r"% e.size)
+        # print("packet size %r"% e.size)
 
-        # a
-        # self.una = dsn
-        self.inflight = True
+        self.state = SubflowState.WaitingAck
         return e
 
 

@@ -7,10 +7,10 @@ import matplotlib.pyplot as plt
 
 delimiter = ","
 
-def plot_buffers():
-    csv_filename = "buffers.csv"
+def plot_buffers(csv_filename, out="output.png"):
+     
     data = pd.read_csv(csv_filename, sep=delimiter,) 
-    d = data[ data["status"] != "Optimal"] 
+    # d = data[ data["status"] != "Optimal"] 
 
     fig = plt.figure()
 
@@ -27,17 +27,17 @@ def plot_buffers():
     axes.set_xlabel("Inter DSN departure time")
 
 
-    filename = "output.png" # os.path.join(os.getcwd(), filename)
+    # filename = "output.png" # os.path.join(os.getcwd(), filename)
     # logger.info
-    print("Saving into %s" % (filename))
-    fig.savefig(filename)
+    print("Saving into %s" % (out))
+    fig.savefig(out)
 
 
 
-def plot_cwnds():
-    csv_filename = "buffers.csv"
+def plot_cwnds(csv_filename, out="output.png"):
+     
     data = pd.read_csv(csv_filename, sep=delimiter,) 
-    d = data[ data["status"] != "Optimal"] 
+    # d = data[ data["status"] != "Optimal"] 
 
     fig = plt.figure()
 
@@ -48,7 +48,7 @@ def plot_cwnds():
 
     data["objective"].hist(grid=True)
 
-    fig.suptitle("Required buffer sizes", fontsize=12)
+    fig.suptitle("With constraints", fontsize=12)
 
     axes.set_ylabel("Proportion")
     axes.set_xlabel("Inter DSN departure time")
@@ -56,11 +56,12 @@ def plot_cwnds():
 
     # filename =  os.path.join(os.getcwd(), os.path.basename(filename))
     # logger.info
-    print("Saving into %s" % (filename))
-    fig.savefig(filename)
+    print("Saving into %s" % (out))
+    fig.savefig(out)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Run tests")
     # parser.add_argument('')
-    plot_buffers()
+    # plot_buffers()
+    plot_cwnds("buffers.csv")

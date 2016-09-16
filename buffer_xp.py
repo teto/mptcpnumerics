@@ -37,6 +37,7 @@ output0 = "results.csv"
 output1 = "buffers.csv"
 # j = json.loads("examples/double.json")
 
+# smallest
 
 def iterate_over_fowd(topology, sf_name: str, step: int):
     """
@@ -99,9 +100,9 @@ def iterate_over_fowd(topology, sf_name: str, step: int):
 # j["subflows"]["slow"]["fowd"]
 # j["subflows"]["slow"]["fowd"]
 
-def optimize_cwnds(
-    commands, 
-    output="cwnds.csv"
+def find_necessary_buffer_for_topologies(
+    topology, 
+    output="buffer.csv"
     ):
 
     with open(output, "w+") as rfd:
@@ -115,13 +116,11 @@ def optimize_cwnds(
         #     writer.writeheader() #
   # fieldnames = ["status", "rcv_wnd", "rcv_next", "duration", "objective" , "throughput", "mss_default", "name"]
 
-        for topology, command in commands:
-            writer = optimize_cwnds_for_topology(topology, command, rfd)
+        for topology in  topologies:
+            writer = find_necessary_buffer_for_topology(topology, rfd)
 
-
-def optimize_cwnds_for_topology(
+def find_necessary_buffer_for_topology(
     topology, 
-    cmd,
     rfd
     ):
     """
@@ -133,13 +132,34 @@ def optimize_cwnds_for_topology(
     """
     m = MpTcpNumerics(topology)
     writer = None
+    # for topology in topologies:
+    # with open(topology) as cfg_fd:
+    #     # you can use object_hook to check that everything is in order
+    #     j = json.load(cfg_fd, ) # object_hook=validate_config)
+    #     print(j)
+    # print(j)
+
+    # m.do_load_from_file(topology)
+
+    assert( "default" in m.subflows )
+
 
     # first run on a normal cycle
-    result = m.do_optcwnd(cmd)
-    result.update({"cmd": cmd})
+    cmd = ""
+    result = m.do_optbuffer(cmd)
+    result.update({"name": "simple"})
     if writer is None:
         writer = csv.DictWriter(rfd, fieldnames=result.keys())
         writer.writeheader() #
+    writer.writerow(result)
+
+    # second run try
+
+    m = MpTcpNumerics(topology)
+    cmd= " --withstand-rto default"
+    result = m.do_optbuffer(cmd)
+    result.update({"name": "withstand rto"})
+
     writer.writerow(result)
 
 
@@ -152,11 +172,5 @@ if __name__ == '__main__':
     # os.system("cat " + output0)
     
 
-    cmds = [
-        ("examples/double.json", " --sfmax fast 0.4"),
-        ("examples/double.json", ""),
-        # ("examples/mono.json", ""),
-        # ("duo.json", )
-        ]
-    # find_necessary_buffer_for_topologies( topologies, output1)
-    optimize_cwnds(cmds)
+    topologies = ["examples/mono.json", "duo.json"]
+    find_necessary_buffer_for_topologies( topologies, output1)

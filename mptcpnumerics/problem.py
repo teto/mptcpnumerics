@@ -3,7 +3,8 @@ import sympy as sp
 import logging
 import csv
 from collections import namedtuple
-from . import SymbolNames
+from . import SymbolNames, generate_rx_name
+from .analysis import Constraint
 
 import inspect
 
@@ -37,7 +38,13 @@ class MpTcpProblem(pu.LpProblem):
         """
         Can tell if obj belongs to the sympy module
         """
-        return inspect.getmodule(obj).__package__.startswith("sympy")
+        try:
+            return inspect.getmodule(obj).__package__.startswith("sympy")
+            
+
+        except Exception as e:
+            log.debug("Not a sympy variable: %s" % e)
+            return False
 
     def setObjective(self,obj):
         # print("inspect,",inspect.getmodule(obj))
@@ -53,7 +60,7 @@ class MpTcpProblem(pu.LpProblem):
         Add mapping sympy -> pulp or integer
         """
         if warn_if_exists and name in self.lp_variables_dict:
-            raise ValueError("Already defined")
+            raise ValueError("[%s] Already defined" % name)
 
         log.debug("Adding entry %s=%r" % (name, value))
         self.lp_variables_dict[name] = value
@@ -71,8 +78,10 @@ class MpTcpProblem(pu.LpProblem):
         for name, sf in subflows.items():
             # TODO set upBound later ? as a constraint
             lp_cwnd = pu.LpVariable(sf.sp_cwnd.name, lowBound=0, cat=pu.LpInteger)
+            lp_rx = pu.LpVariable(generate_rx_name(sf.name), lowBound=0, cat=pu.LpInteger)
             self.add_mapping(lp_cwnd.name, lp_cwnd)
             self.add_mapping(sf.sp_mss.name, sf.mss) # hardcoded mss
+            self.add_mapping( generate_rx_name(sf.name), lp_rx)
             # self.lp_variables_dict.update({
             #     lp_cwnd.name: lp_cwnd,
             #     sf.sp_mss.name: sf.mss,
@@ -96,16 +105,23 @@ class MpTcpProblem(pu.LpProblem):
         # StrictLessThan or childof
         # if isinstance(other,sympy.core.relational.Unequality):
         # if isinstance(other, sp.relational.Relational):
-        log.debug("iadd: %r" % other)
+        log.debug("iadd: %s" % type(other))
 
-        if self.is_sympy(other):
+        if isinstance(other, Constraint):
+            constraint = other
+            print("Adding constraint: " , constraint)
+            print(" constraint.wnd: " , constraint.wnd, type(constraint.wnd))
+            # HACK ideally my fork should automatically convert toa pulp constraint but that does not work
+            constraint = self.sp_to_pulp(constraint.size) <= self.sp_to_pulp(constraint.wnd)
+
+        elif self.is_sympy(other):
             # print("GOGOGO!:!!")
             # TODO use eval ?
             # other.rel_op # c l'operateur
             lconstraint = self.sp_to_pulp(other.lhs)
             rconstraint = self.sp_to_pulp(other.rhs)
 
-            log.debug("Lconstraint= %r" % rconstraint)
+            log.debug("Lconstraint= %r" % lconstraint)
             log.debug("Rconstraint=%r", rconstraint) # 'of type', type(rconstraint) )
             # do the same with rhs
             # print("constraint1=", lconstraint)
@@ -123,9 +139,9 @@ class MpTcpProblem(pu.LpProblem):
         Converts symbolic variables (sympy ones) to linear programmning
         aka pulp variables
 
-        :param variables: symbolic variables to convert
+        Args:
+            variables: symbolic variables to convert
 
-        #
 
         .. seealso::
 
@@ -144,15 +160,19 @@ class MpTcpProblem(pu.LpProblem):
     def sp_to_pulp(self, expr):
         """
         Converts a sympy expression into a pulp.LpAffineExpression
-        :param translation_dict
-        :expr sympy expression
-        :returns a pulp expression
+        Args:
+            translation_dict
+            sympy expression
+
+        Ret:
+            a pulp expression
         """
 
         # if not isinstance(expr, sp.Symbol):
+        print("Type %s", type(expr))
         if not self.is_sympy(expr):
             log.warning("%s not a symbol but a %s" % (expr, type(expr)))
-            # return expr
+            return expr
 
         f = sp.lambdify(expr.free_symbols, expr)
         # TODO test with pb.variablesDict()["cwnd_{%s}" % sf_name])
@@ -164,12 +184,14 @@ class MpTcpProblem(pu.LpProblem):
         return f(*values)
 
 
-    def generate_result(self, sim):
+    def generate_result(self, sim, export_per_subflow_variables: bool=True):
         """
         Should be called only once the problem got solved
         Returns a dict that can be enriched
 
-        :param sim: Simulator
+        Args:
+            sim: Simulator
+            per_subflow: choose to add per subflow variables
 
         TODO add throughput, per subflow throughput etc...
         """
@@ -177,31 +199,31 @@ class MpTcpProblem(pu.LpProblem):
         # todo add parameters of lp_variables_dict ?
         duration = sim.time_limit
 
-        # kind of problem
-        # self.subflows[p.subflow_id].rx_bytes += p.size
-        # print("RCV_NEXT=", sim.receiver.rcv_next)
-        # print("RCV_NEXT=", self.sp_to_pulp(sim.receiver.rcv_next))
-        result = {
-                "status": pu.LpStatus[self.status],
-                # "rcv_buffer": pb.variables()[SymbolNames.ReceiverWindow.value],
-                # sp_to_pulp
-                "throughput":  self.sp_to_pulp(sim.receiver.rcv_next)/ duration,
-                # a list ofs PerSubflowResult
-                # "subflows": {},
-                "objective": pu.value(self.objective)
+        # kind of problem self.subflows[p.subflow_id].rx_bytes += p.size
+        # print("RCV_NEXT=", sim.receiver.rcv_next) print("RCV_NEXT=",
+        # self.sp_to_pulp(sim.receiver.rcv_next))
+        result = { "status": pu.LpStatus[self.status],
+                # "rcv_buffer":
+                "throughput": self.sp_to_pulp(sim.receiver.rcv_next) / duration,
+                # a list ofs PerSubflowResult "subflows": {},
+                "rcv_next": pu.value(self.sp_to_pulp(sim.receiver.rcv_next)),
+                "objective": pu.value(self.objective) 
         }
+
         # for key, var in self.variablesDict():
         for key, var in self.lp_variables_dict.items():
             # print("key/var", key, var)
             result.update({key: pu.value(var)})
 
 
-        # TODO add per subflow throughput
-        for name, sf in sim.sender.subflows.items():
-            print("key/var", key, var)
+        # TODO add per subflow throughput totototo echo "hello"
+        if export_per_subflow_variables:
+            for name, sf in sim.sender.subflows.items():
+                print("key/var", key, var)
 
-            result.update({ "rx_bytes": self.sp_to_pulp(sf.rx_bytes)})
-            # result.update({ "tx": self.sp_to_pulp(sf.sp_tx)})
+                # TODO should dep
+                result.update({ generate_rx_name(name): pu.value(self.sp_to_pulp(sf.rx_bytes))})
+                # result.update({ "tx": self.sp_to_pulp(sf.sp_tx)})
 
         result.update({"duration": duration })
         # result.update({"duration": sim.time_limit })
