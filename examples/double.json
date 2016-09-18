@@ -25,7 +25,7 @@
 			"mss": 1,
 			"var": 10,
 			"fowd": 10,
-			"bowd": 10,
+			"bowd": 30,
 			"loss": 0.05,
 			"contribution": 0.5
 		}

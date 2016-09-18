@@ -1,5 +1,5 @@
 {
-	"name": "duo",
+	"name": "3 subflows",
 	"sender": {
 		"snd_buffer": 40,
 		"capabilities": ["NR-SACK"]
@@ -21,6 +21,16 @@
 			"contribution": 0.5
 		},
 		"copy":
+		{
+			"cwnd": 20,
+			"mss": 1,
+			"var": 10,
+			"fowd": 20,
+			"bowd": 20,
+			"loss": 0.05,
+			"contribution": 0.5
+		},
+		"copy2":
 		{
 			"cwnd": 20,
 			"mss": 1,

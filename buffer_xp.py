@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 import json
-from mptcpnumerics.cli import MpTcpNumerics, validate_config
+from mptcpnumerics.cli import MpTcpNumerics
 import argparse
+import pandas as pd
 import logging
 import copy
 import csv
 import os
+import matplotlib.pyplot as plt
 
 log = logging.getLogger("mptcpnumerics")
 log.setLevel(logging.DEBUG)
@@ -32,12 +34,69 @@ mn /home/teto/scheduler/examples/double.json optcwnd --sfmin fast 0.4
 """
 step = 5 # milliseconds
 
-topology0 = "examples/double.json"
-output0 = "results.csv"
+topologies = [
+    # "examples/mono.json",
+    "duo.json",
+    "triplet.json",
+    "quatuor.json",
+    "6.json",
+    ]
+
+# topology0 = "examples/double.json"
 output1 = "buffers.csv"
+png_output = "results_buffer.png"
 # j = json.loads("examples/double.json")
 
+delimiter = ","
+fieldnames = [
+"rcv_next","duration","rcv_wnd","name",
+# "mss_default","rx_default",
+"status","objective","throughput",
+# "cwnd_default"
+]
+
 # smallest
+def plot_buffers(csv_filename, out="output.png"):
+     
+    data = pd.read_csv(csv_filename, sep=delimiter,) 
+    # d = data[ data["status"] != "Optimal"] 
+
+    fig = plt.figure()
+
+    axes = fig.gca()
+    # print(d)
+    # if not d.empty() :
+    #     raise Exception("not everything optimal")
+
+    # objective c'est la taille du buffer
+    # data["objective"].hist(grid=True)
+    print(data)
+    # data.boxplot(ax=axes,
+    #     column="objective", 
+    #     by="name",
+    #     # title="Throughput comparison between the linux and ns3 implementations", 
+    #     # xlabel=""
+    #     # rot=45 
+    # )
+    # data = data.groupby("name", "objective")
+    data.set_index("name", inplace=True)
+    data["objective"].plot.bar(ax=axes,
+            legend=False,
+            # by="name"
+            # x= data["name"],
+            # y= data["objective"]
+            rot=0
+            )
+    fig.suptitle("", fontsize=12)
+
+    axes.set_ylabel("Required buffer sizes")
+    axes.set_xlabel("")
+
+
+    # filename = "output.png" # os.path.join(os.getcwd(), filename)
+    # logger.info
+    print("Saving into %s" % (out))
+    fig.savefig(out)
 
 def iterate_over_fowd(topology, sf_name: str, step: int):
     """
@@ -58,7 +117,7 @@ def iterate_over_fowd(topology, sf_name: str, step: int):
     with open(output0, "w+") as rfd:
 
         # we need to make a copy of the dict
-        toto = m.config = copy.deepcopy(j)
+        m.config = copy.deepcopy(j)
 
         # skips do_load_from_file to
         print("current config", j)
@@ -74,7 +133,6 @@ def iterate_over_fowd(topology, sf_name: str, step: int):
         print("max RTT %d from subflow %s"%( sf_max_rtt, sf_max_rtt_name))
 
 
-        writer = None
         for fowd in range(step, sf_max_rtt, step):
             print("TODO update J config")
             # MAJ le fowd, on devrait corriger le bowd
@@ -89,10 +147,8 @@ def iterate_over_fowd(topology, sf_name: str, step: int):
 
             result = m.do_optcwnd("")
             result.update({'config_filename': config_filename})
-            if writer is None:
-
-                writer = csv.DictWriter(rfd, fieldnames=result.keys())
-                writer.writeheader() #
+            #     writer = csv.DictWriter(rfd, fieldnames=result.keys())
+            #     writer.writeheader() #
 
             writer.writerow(result)
 
@@ -106,22 +162,22 @@ def find_necessary_buffer_for_topologies(
     ):
 
     with open(output, "w+") as rfd:
-        writer = None
         # print("Run with %d subflows " % i)
 
-        # if writer is None:
-        # writer = csv.DictWriter(rfd,
-                # fieldnames=result.keys()
-                # )
-        #     writer.writeheader() #
-  # fieldnames = ["status", "rcv_wnd", "rcv_next", "duration", "objective" , "throughput", "mss_default", "name"]
+        writer = csv.DictWriter(rfd,
+                fieldnames=fieldnames,
+                extrasaction="ignore",
+                delimiter=delimiter,
+
+                )
+        writer.writeheader()
 
         for topology in  topologies:
-            writer = find_necessary_buffer_for_topology(topology, rfd)
+            find_necessary_buffer_for_topology(topology, writer)
 
 def find_necessary_buffer_for_topology(
     topology, 
-    rfd
+    writer
     ):
     """
     Add a subflow identical to the first several times 'till max_nb_of_subflows
@@ -131,7 +187,6 @@ def find_necessary_buffer_for_topology(
     entering RTO
     """
     m = MpTcpNumerics(topology)
-    writer = None
     # for topology in topologies:
     # with open(topology) as cfg_fd:
     #     # you can use object_hook to check that everything is in order
@@ -147,10 +202,11 @@ def find_necessary_buffer_for_topology(
     # first run on a normal cycle
     cmd = ""
     result = m.do_optbuffer(cmd)
-    result.update({"name": "simple"})
-    if writer is None:
-        writer = csv.DictWriter(rfd, fieldnames=result.keys())
-        writer.writeheader() #
+    # m.config["name"]
+    result.update({"name": m.config["name"] })
+    # if writer is None:
+    #     writer = csv.DictWriter(rfd, fieldnames=result.keys())
+    #     writer.writeheader() #
     writer.writerow(result)
 
     # second run try
@@ -158,7 +214,7 @@ def find_necessary_buffer_for_topology(
     m = MpTcpNumerics(topology)
     cmd= " --withstand-rto default"
     result = m.do_optbuffer(cmd)
-    result.update({"name": "withstand rto"})
+    result.update({"name": m.config["name"] + " + rto"})
 
     writer.writerow(result)
 
@@ -166,11 +222,19 @@ def find_necessary_buffer_for_topology(
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Run tests")
-    # parser.add_argument()
+    # group = parser.add_argument_group('authentication')
+    parser.add_argument("-p", "--plot", action="store_true", help="Generate a plot" )
+    parser.add_argument("-d", "--display", action="store_true", default=False,
+            help="Open generated picture" )
     # filename
     # iterate_over_fowd(topology0, "slow", 10)
     # os.system("cat " + output0)
     
+    args, extra = parser.parse_known_args()
 
-    topologies = ["examples/mono.json", "duo.json"]
-    find_necessary_buffer_for_topologies( topologies, output1)
+    find_necessary_buffer_for_topologies(topologies, output1)
+    if args.plot:
+        plot_buffers(output1, png_output)
+    if args.display:
+        os.system("xdg-open %s" % png_output)
+

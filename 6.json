@@ -1,0 +1,74 @@
+{
+	"name": "4 subflows",
+	"sender": {
+		"snd_buffer": 40,
+		"capabilities": ["NR-SACK"]
+	},
+	"receiver": {
+		"rcv_buffer": 40,
+		"capabilities": ["NR-SACK"]
+	},
+	"capabilities": ["NR-SACK"],
+	"subflows": {
+		"default":
+		{
+			"cwnd": 20,
+			"mss": 1,
+			"var": 10,
+			"fowd": 19,
+			"bowd": 20,
+			"loss": 0.05,
+			"contribution": 0.5
+		},
+		"copy":
+		{
+			"cwnd": 20,
+			"mss": 1,
+			"var": 10,
+			"fowd": 20,
+			"bowd": 20,
+			"loss": 0.05,
+			"contribution": 0.5
+		},
+		"copy2":
+		{
+			"cwnd": 20,
+			"mss": 1,
+			"var": 10,
+			"fowd": 20,
+			"bowd": 20,
+			"loss": 0.05,
+			"contribution": 0.5
+		},
+		"copy3":
+		{
+			"cwnd": 20,
+			"mss": 1,
+			"var": 10,
+			"fowd": 20,
+			"bowd": 20,
+			"loss": 0.05,
+			"contribution": 0.5
+		},
+		"copy4":
+		{
+			"cwnd": 20,
+			"mss": 1,
+			"var": 10,
+			"fowd": 20,
+			"bowd": 20,
+			"loss": 0.05,
+			"contribution": 0.5
+		},
+		"copy5":
+		{
+			"cwnd": 20,
+			"mss": 1,
+			"var": 10,
+			"fowd": 20,
+			"bowd": 20,
+			"loss": 0.05,
+			"contribution": 0.5
+		}
+	}
+}

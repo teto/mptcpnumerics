@@ -5,7 +5,6 @@ import argparse
 import logging
 import matplotlib.pyplot as plt
 
-delimiter = ","
 
 def plot_buffers(csv_filename, out="output.png"):
      
@@ -46,7 +45,14 @@ def plot_cwnds(csv_filename, out="output.png"):
     # if not d.empty() :
     #     raise Exception("not everything optimal")
 
-    data["objective"].hist(grid=True)
+    # data["objective"].hist(by="name", grid=True)
+    ax = data["objective"].hist(
+        # column="objective", 
+        by="name",
+        # title="Throughput comparison between the linux and ns3 implementations", 
+        # xlabel=""
+        # rot=45 
+    )
 
     fig.suptitle("With constraints", fontsize=12)
 

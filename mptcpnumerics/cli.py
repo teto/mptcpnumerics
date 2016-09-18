@@ -219,10 +219,10 @@ class MpTcpNumerics(cmd.Cmd):
         # add constraints from the simulation
         for constraint in sim.sender.constraints:
             # lp_constraint = sp_to_pulp(tab, constraint.size) <= sp_to_pulp(tab, constraint.wnd)
-            pb += lp_constraint
+            pb += constraint
 
         pb.solve() # returns status
-        result = pb.generate_result(sim)
+        result = pb.generate_result(sim, export_per_subflow_variables=False)
         result.update({"duration": duration})
 
         print("Status:", pu.LpStatus[pb.status])
@@ -372,7 +372,7 @@ class MpTcpNumerics(cmd.Cmd):
         pb.solve()
 
         # returned dictionary
-        result = pb.generate_result(sim)
+        result = pb.generate_result(sim, export_per_subflow_variables=False)
         # result.update({"duration": duration})
         # TODO here we should add some precisions, like MpTcpSubflow
         # duration of the cycle !
@@ -445,6 +445,7 @@ class MpTcpNumerics(cmd.Cmd):
             # sort them depending on fowd
         log.info("Initial send")
         # subflows = sender.subflows.values()
+        # TODO we should send on the fainting subflow first
         ordered_subflows = sorted(self.subflows.values(), key=lambda x: x.fowd, reverse=True)
 
         # global current_time
