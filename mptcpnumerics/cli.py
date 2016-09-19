@@ -27,7 +27,8 @@ from . import SymbolNames
 from jsonschema import validate
 
 log = logging.getLogger("mptcpnumerics")
-log.setLevel(logging.DEBUG)
+# log.setLevel(logging.DEBUG)
+
 streamHandler = logging.StreamHandler()
 # %(asctime)s - %(name)s - %
 formatter = logging.Formatter('%(levelname)s - %(message)s')
@@ -222,7 +223,7 @@ class MpTcpNumerics(cmd.Cmd):
             pb += constraint
 
         pb.solve() # returns status
-        result = pb.generate_result(sim, export_per_subflow_variables=False)
+        result = pb.generate_result(sim, export_per_subflow_variables=True)
         result.update({"duration": duration})
 
         print("Status:", pu.LpStatus[pb.status])
@@ -332,11 +333,11 @@ class MpTcpNumerics(cmd.Cmd):
         for sf_name, min_ratio in args.minratios:
             print("name/ratio", sf_name, min_ratio)
             print("type", type(min_ratio) )
-            pb += sim.sender.subflows[sf_name].rx_bytes >= float(min_ratio) * total_bytes
+            pb += sim.sender.subflows[sf_name].rx >= float(min_ratio) * total_bytes
 
         for sf_name, max_ratio in args.maxratios:
             print("name/ratio", sf_name, max_ratio)
-            pb += sim.sender.subflows[sf_name].rx_bytes <= float(max_ratio) * total_bytes
+            pb += sim.sender.subflows[sf_name].rx <= float(max_ratio) * total_bytes
 
         # subflow contribution should be no more than % of total
         for sf_name, max_cwnd in args.maxcwnds:
@@ -372,7 +373,7 @@ class MpTcpNumerics(cmd.Cmd):
         pb.solve()
 
         # returned dictionary
-        result = pb.generate_result(sim, export_per_subflow_variables=False)
+        result = pb.generate_result(sim, export_per_subflow_variables=True)
         # result.update({"duration": duration})
         # TODO here we should add some precisions, like MpTcpSubflow
         # duration of the cycle !
@@ -616,7 +617,7 @@ def run():
     args, unknown_args = parser.parse_known_args(sys.argv[1:])
 
     # logging.CRITICAL = 50
-    level = logging.CRITICAL - min(4,args.debug) * 10
+    level = logging.CRITICAL - min(4, args.debug) * 10
     # log.setLevel(level)
     # print("Log level set to %s " % logging.getLevelName(level))
 

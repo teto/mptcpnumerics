@@ -623,8 +623,10 @@ class MpTcpReceiver:
             )
             if self.rcv_next == block.dsn:
                 self.rcv_next = block.dsn + block.size
+                log.debug("rcv_next advanced")
                 # log.debug ("updated ")
             else:
+                log.debug("Appended to out of order blocks")
                 new_list.append(block)
 
         # swap old list with new one
@@ -675,7 +677,8 @@ class MpTcpReceiver:
 
 
         # we want to compute per_subflow throughput to know contributions
-        self.subflows[p.subflow_id].rx_bytes += p.size
+        print("SIZE=%s", p.size)
+        self.subflows[p.subflow_id].rx += p.size
 
         if MpTcpCapabilities.DAckReplication in self.config["receiver"]["capabilities"]:
             # for sf in self.subflows:
@@ -871,8 +874,9 @@ by rcv_window
         self.finished = True
 
         # disabled when abrut end of simulation
-        # assert len(self.receiver.out_of_order) == 0, "Still out of order packets "
+        assert len(self.receiver.out_of_order) == 0, "Still out of order packets "
         # assert self.receiver.rcv_next == self.sender.snd_next, "Everything received"
+
 
         # constraints = []
         # self.sender.constraints()

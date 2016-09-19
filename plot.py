@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
-import pandas as pd
 import argparse
-
-import logging
 import matplotlib.pyplot as plt
-
+import pandas as pd
 
 def plot_buffers(csv_filename, out="output.png"):
      

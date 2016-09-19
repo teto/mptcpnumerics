@@ -54,7 +54,8 @@ class MpTcpSubflow:
         self.sp_mss = sp.Symbol(generate_mss_name(name), positive=True)
         self.mss = mss
         self.sp_tx = 0
-        self.rx_bytes = sp.Symbol(generate_rx_name(name), positive=True)
+
+        self._rx_bytes = 0 # sp.Symbol(generate_rx_name(name), positive=True)
 
         # self.mss = mss
         print("%r" % self.sp_cwnd)
@@ -81,6 +82,17 @@ class MpTcpSubflow:
 
         self.loss_rate = loss
         """Unused"""
+
+
+    @property
+    def rx(self):
+        return self._rx_bytes
+
+    @rx.setter
+    def rx(self, value):
+        # log.
+        print("New RX for sf %s !  %s -> %s" % (self.name, self._rx_bytes, value) )
+        self._rx_bytes = value
 
     @property
     def state(self):

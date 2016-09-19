@@ -34,12 +34,20 @@ mn /home/teto/scheduler/examples/double.json optcwnd --sfmin fast 0.4
 """
 step = 5 # milliseconds
 
+
+# TODO here we should use tuples with one saying which 
 topologies = [
     # "examples/mono.json",
-    "duo.json",
-    "triplet.json",
-    "quatuor.json",
-    "6.json",
+    ("duo.json", "default"),
+    ("triplet.json", "default"),
+    ("quatuor.json", "default"),
+    ("6.json", "default"),
+    ]
+
+asymetric = [
+    ("asymetric.json", "slow"),
+    ("asymetric.json", "slow"),
+    
     ]
 
 # topology0 = "examples/double.json"
@@ -80,7 +88,8 @@ def plot_buffers(csv_filename, out="output.png"):
     # )
     # data = data.groupby("name", "objective")
     data.set_index("name", inplace=True)
-    data["objective"].plot.bar(ax=axes,
+    data["objective"].plot.bar(
+            ax=axes,
             legend=False,
             # by="name"
             # x= data["name"],
@@ -172,11 +181,12 @@ def find_necessary_buffer_for_topologies(
                 )
         writer.writeheader()
 
-        for topology in  topologies:
-            find_necessary_buffer_for_topology(topology, writer)
+        for topology, rto_subflow in topologies:
+            find_necessary_buffer_for_topology(topology, rto_subflow, writer)
 
 def find_necessary_buffer_for_topology(
     topology, 
+    fainting_subflow,
     writer
     ):
     """
@@ -212,7 +222,7 @@ def find_necessary_buffer_for_topology(
     # second run try
 
     m = MpTcpNumerics(topology)
-    cmd= " --withstand-rto default"
+    cmd= " --withstand-rto '%s'" % fainting_subflow
     result = m.do_optbuffer(cmd)
     result.update({"name": m.config["name"] + " + rto"})
 
@@ -226,9 +236,6 @@ if __name__ == '__main__':
     parser.add_argument("-p", "--plot", action="store_true", help="Generate a plot" )
     parser.add_argument("-d", "--display", action="store_true", default=False,
             help="Open generated picture" )
-    # filename
-    # iterate_over_fowd(topology0, "slow", 10)
-    # os.system("cat " + output0)
     
     args, extra = parser.parse_known_args()
 

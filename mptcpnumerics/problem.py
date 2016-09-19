@@ -202,11 +202,12 @@ class MpTcpProblem(pu.LpProblem):
         # kind of problem self.subflows[p.subflow_id].rx_bytes += p.size
         # print("RCV_NEXT=", sim.receiver.rcv_next) print("RCV_NEXT=",
         # self.sp_to_pulp(sim.receiver.rcv_next))
+        transmitted_bytes = pu.value(self.sp_to_pulp(sim.receiver.rcv_next))
         result = { "status": pu.LpStatus[self.status],
                 # "rcv_buffer":
-                "throughput": self.sp_to_pulp(sim.receiver.rcv_next) / duration,
+                "throughput": transmitted_bytes / duration,
                 # a list ofs PerSubflowResult "subflows": {},
-                "rcv_next": pu.value(self.sp_to_pulp(sim.receiver.rcv_next)),
+                "rcv_next": transmitted_bytes,
                 "objective": pu.value(self.objective) 
         }
 
@@ -222,8 +223,13 @@ class MpTcpProblem(pu.LpProblem):
                 print("key/var", key, var)
 
                 # TODO should dep
-                result.update({ generate_rx_name(name): pu.value(self.sp_to_pulp(sf.rx_bytes))})
+                print("RX=" , self.sp_to_pulp(sf.rx))
+                result.update({ generate_rx_name(name): pu.value(self.sp_to_pulp(sf.rx))})
                 # result.update({ "tx": self.sp_to_pulp(sf.sp_tx)})
+
+                contrib = pu.value(self.sp_to_pulp(sf.rx)) / transmitted_bytes
+                result.update({ "contrib_" + sf.name: contrib})
+                # TODO generate a contribution for each subflow ?
 
         result.update({"duration": duration })
         # result.update({"duration": sim.time_limit })
