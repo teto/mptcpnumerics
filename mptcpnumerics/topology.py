@@ -160,7 +160,7 @@ class MpTcpSubflow:
 
         """
         # self.una += self.sp_cwnd
-        assert self.busy() == True
+        assert self.busy() == True, "Can't ack a window that sent nothing"
         self.increase_window()
         self.state = SubflowState.Available
 

@@ -1,5 +1,5 @@
 {
-	"name": "duo",
+	"name": "2",
 	"sender": {
 		"snd_buffer": 40,
 		"capabilities": ["NR-SACK"]

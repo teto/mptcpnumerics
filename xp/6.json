@@ -1,5 +1,5 @@
 {
-	"name": "3",
+	"name": "6",
 	"sender": {
 		"snd_buffer": 40,
 		"capabilities": ["NR-SACK"]
@@ -15,30 +15,56 @@
 			"cwnd": 20,
 			"mss": 1,
 			"var": 10,
-			"fowd": 5,
-			"bowd": 35,
-			"loss": 0.05,
-			"contribution": 0.5
+			"fowd": 15,
+			"bowd": 25,
+			"loss": 0.05
 		},
 		"b":
 		{
 			"cwnd": 20,
 			"mss": 1,
 			"var": 10,
-			"fowd": 30,
-			"bowd": 10,
-			"loss": 0.05,
-			"contribution": 0.5
+			"fowd": 20,
+			"bowd": 20,
+			"loss": 0.05
 		},
 		"c":
 		{
 			"cwnd": 20,
 			"mss": 1,
 			"var": 10,
-			"fowd": 20,
-			"bowd": 20,
+			"fowd": 5,
+			"bowd": 35,
+			"loss": 0.05
+		},
+		"d":
+		{
+			"cwnd": 20,
+			"mss": 1,
+			"var": 10,
+			"fowd": 35,
+			"bowd": 5,
 			"loss": 0.05,
 			"contribution": 0.5
+		},
+		"e":
+		{
+			"cwnd": 20,
+			"mss": 1,
+			"var": 10,
+			"fowd": 10,
+			"bowd": 30,
+			"loss": 0.05,
+			"contribution": 0.5
+		},
+		"f":
+		{
+			"cwnd": 20,
+			"mss": 1,
+			"var": 10,
+			"fowd": 25,
+			"bowd": 15,
+			"loss": 0.05
 		}
 	}
 }

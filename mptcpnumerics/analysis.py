@@ -298,40 +298,36 @@ class MpTcpSender:
 
 
     Attributes:
-        snd_una:
+        snd_una: unacknowleged (SND.UNA)
         subflows: is a dict( subflow_name, MpTcpSubflow)
-        _snd_next: Next #seq to send
-        rcv_wnd: 
-        scheduler
+        _snd_next: Next #seq to send (SND.NXT)
+        rcv_wnd: Current receiver window.
+        scheduler (Scheduler):
+        snd_buf_max: Maximum size of the sending buffer. 
+        constraints: Constraints (head of line blocking, flow control) are saved with sympy symbols.
     """
     # subflow congestion windows
     # need to have dsn, cwnd, outstanding ?
 
     # TODO maintain statistics about the events and categorize them by HOLTypes
-    def __init__(self, rcv_wnd, snd_buffer, subflows, scheduler : Scheduler):
+    def __init__(self, rcvbufmax, sndbufmax, subflows, scheduler : Scheduler):
         """
         Args:
-            rcv_wnd: is a sympy symbol
-            snd_buf_max: Maximum size of the buffer
-
+            sndbufmax: Maximum size of the buffer
         """
-        # what if we leave it unconstrained ?
-        self.snd_buf_max = snd_buffer 
-
+        # For now it 
+        self.snd_buf_max = sndbufmax
         self.scheduler = scheduler 
         self._snd_next = 0    # left edge of the window/dsn (rename to snd_una ?) 
         self._snd_una = 0
-        self.rcv_wnd = rcv_wnd
+        self.rcv_wnd = rcvbufmax # there is no 3WHS so no way to get the bufmax
         self.scheduler = scheduler
-
         # self.bytes_sent = 0
         # """total bytes sent at the mptcp level, i.e., different bytes"""
         self.constraints = []
-        """Constraints (head of line blocking, flow control) are saved with sympy symbols. """
 
         self.subflows = subflows
         log.info("Sender with scheduler %s" % self.scheduler)
-        print(self.subflows)
 
     @property
     def snd_una(self):
@@ -362,7 +358,7 @@ class MpTcpSender:
         # sum(filter(lambda x: x.cwnd if x.inflight), self.subflows)
         return inflight
 
-    def available_window(self):
+    def available_snd_window(self):
         # min(self.snd_buf_max, self.rcv_wnd)
         return self.rcv_wnd - self.inflight()
 
@@ -430,7 +426,9 @@ class MpTcpSender:
             assert self.subflows[sf_id].state == SubflowState.Available
 
             # Compute cwnd before sending the packets
-            available_window = self.available_window()
+            # sympy can't tell which is the minimum between the sender and the receiver
+            # windows.
+            available_sndbuf = self.available_snd_window()
 
             dsn = self.snd_next
             pkt = self.subflows[sf_id].generate_pkt(dsn)
@@ -438,7 +436,8 @@ class MpTcpSender:
             # max(self.snd_next + pkt.size, self.snd_next)
             log.debug("Sending on subflow [%s] packet %s" % (sf_id, pkt))
 
-            self.add_flow_control_constraint(pkt.size, available_window)
+            self.add_flow_control_constraint(pkt.size, available_sndbuf)
+            self.add_flow_control_constraint(pkt.size, self.rcv_wnd)
 
 
         return pkt
@@ -487,7 +486,7 @@ class MpTcpSender:
             # return self.send_on_subflow(sf.name, p.dsn)
 
         # TODO
-        print ("comparing %s (dack) > %s (una) => result = %s " % (p.dack, self.snd_una, p.dack > self.snd_una ))
+        log.debug("comparing %s (dack) > %s (una) => result = %s " % (p.dack, self.snd_una, p.dack > self.snd_una ))
 
 #   // Test for conditions that allow updating of the window
 #   // 1) segment contains new data (advancing the right edge of the receive
@@ -498,10 +497,12 @@ class MpTcpSender:
 #         self.snd_una= max(self.snd_una, p.dack)
         # TODO should update
         print( p.dack > self.snd_una )
-        if p.dack > self.snd_una:
+        if p.dack >= self.snd_una:
+            log.debug("Acking ")
             self.rcv_wnd = p.rcv_wnd
             self.snd_una = p.dack
         elif p.rcv_wnd > self.rcv_wnd:
+            log.warn("TO CHECK")
             self.rcv_wnd = p.rcv_wnd
         else:
             log.warn("Not advancing rcv_wnd")
@@ -536,6 +537,11 @@ class MpTcpReceiver:
     """
     Max recv window is set from json file
     Can only send acks, not data
+
+    Attributes:
+
+        wnd : Available window
+
     """
 
     def __init__(self, rcv_wnd, capabilities, config, subflows):
@@ -549,7 +555,6 @@ class MpTcpReceiver:
         # self.subflows = {} #: dictionary of dictionary subflows
         self.rcv_wnd_max = rcv_wnd
         self.wnd = self.rcv_wnd_max
-        """Available window"""
         self._rcv_next = 0
         # a list of tuples (headSeq, endSeq)
         self.out_of_order = []
@@ -644,17 +649,17 @@ class MpTcpReceiver:
             )
             if self.rcv_next == block.dsn:
                 # += ?
+                log.debug("OOO packet becomes inorder {b}".format(b=block))
                 self.rcv_next = block.dsn + block.size
-                log.debug("rcv_next advanced")
                 # log.debug ("updated ")
             else:
-                log.debug("Remaing OOO")
+                log.debug("Remaining OOO: {b}".format(b=block))
                 new_list.append(block)
 
         # swap old list with new one
         self.out_of_order = new_list
         
-        log.debug("New list %s", self.out_of_order)
+        log.debug("New OOO list %s", self.out_of_order)
 
 
     def recv(self, p):
@@ -748,6 +753,10 @@ by rcv_window
     Attributes:
         time_limit (int): Ploppyboulba
         receiver (MpTcpReceiver): Ploppyboulba
+        config ():
+        time_limit: Tells when the simulator should stop
+        events: List that contains events sorted by their scheduled time
+        http://www.grantjenks.com/docs/sortedcontainers/sortedlistwithkey.html#id1
 
     """
 # TODO when possible move it to
@@ -767,15 +776,8 @@ by rcv_window
         self.config = config
         self.sender = sender
         self.receiver = receiver
-        # http://www.grantjenks.com/docs/sortedcontainers/sortedlistwithkey.html#id1
         self.events = sortedcontainers.SortedListWithKey(key=lambda x: x.time)
-        """
-        List that contains events sorted by their scheduled time
-        """
-
         self.time_limit = None
-        """Tells when the simulator should stop"""
-
         # self.current_time = 0
         """
         :ivar current_time this is a test
@@ -785,8 +787,6 @@ by rcv_window
         # TODO remove ?
         self.constraints =[]
 
-        # expression of the objective function
-        # self.throughput = None # TODO remove that should be in the receiver/sender
         self.finished = False
         """True when simulation has ended"""
 

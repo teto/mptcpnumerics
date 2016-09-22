@@ -38,7 +38,7 @@ class GreedyScheduler(Scheduler):
         log.debug("Scheduler.send ")
 
         # one can use sorted or list.sort for inplace sorting
-        print("TYPE=", type(sender.subflows))
+        # print("TYPE=", type(sender.subflows))
         # ordered_subflows = OrderedDict(sender.subflows)
         # print("SUBFLOW_LIST", subflows)
         # dictionary sorted by key
@@ -51,11 +51,11 @@ class GreedyScheduler(Scheduler):
             print("ordered by key")
             ordered_subflows = OrderedDict(sorted(sender.subflows.items(), key=lambda t: t[0]))
             ordered_subflows = ordered_subflows.values()
-        print("TYPE2=", type(ordered_subflows))
+        # print("TYPE2=", type(ordered_subflows))
 
         print("SCHEDULING ORDER")
         for order, sf in enumerate(ordered_subflows):
-            print("%d: %s" % (order, sf.name))
+            log.debug("%d: %s (can send ? %r)" % (order, sf.name, sf.can_send()))
 
         events = []
         # global current_time
@@ -65,12 +65,13 @@ class GreedyScheduler(Scheduler):
             # ca genere des contraintes
             # pkt = sf.generate_pkt(0, sender.snd_next)
             if not sf.can_send():
-                log.debug("%s can't send (s, skipping..." % sf.name)
+                log.debug("sf %s can't send ( skipping..." % sf.name)
                 continue
             
             pkt = sender.send_on_subflow(sf.name, )
-            print("<<< Comparing %s with %s " % (sf, fainting_subflow))
+            # print("<<< Comparing %s with %s " % (sf, fainting_subflow))
             if sf == fainting_subflow:
+                log.debug("RTO")
                 event = sender.enter_rto(sf.name, pkt.dsn)
                 events.append(event)
             else:

@@ -8,6 +8,9 @@ import copy
 import csv
 import os
 import matplotlib.pyplot as plt
+import matplotlib
+from matplotlib.font_manager import FontProperties
+
 
 log = logging.getLogger("mptcpnumerics")
 log.setLevel(logging.DEBUG)
@@ -39,9 +42,9 @@ different_sf_nb_topologies = [
 same_rtt_different_fowd_topologies = [
         # "examples/mono.json",
         ("xp/duo.json", "default"),
-        # ("xp/triplet.json", "default"),
+        ("xp/triplet.json", "default"),
         # ("xp/quatuor.json", "default"),
-        # ("xp/6.json", "default"),
+        ("xp/6.json", "default"),
         ]
 
 asymetric = [
@@ -64,13 +67,18 @@ fieldnames = [
 # "cwnd_default"
 ]
 
+
 # smallest
 def plot_buffers(csv_filename, out="output.png"):
      
     data = pd.read_csv(csv_filename, sep=delimiter,) 
     # d = data[ data["status"] != "Optimal"] 
 
+    # Ca genere un graphe avec plein de caracteres bizarres
+    # matplotlib.rc('font', family='FontAwesome')
     fig = plt.figure()
+    # prop = FontProperties()
+    # prop.set_file('STIXGeneral.ttf')
 
     axes = fig.gca()
     # print(d)
@@ -99,7 +107,7 @@ def plot_buffers(csv_filename, out="output.png"):
             )
     fig.suptitle("", fontsize=12)
 
-    axes.set_ylabel("Required buffer sizes")
+    axes.set_ylabel("Required buffer sizes (MSS)")
     axes.set_xlabel("")
 
 
@@ -144,32 +152,43 @@ def find_buffer_per_scheduler(
     entering RTO
     """
     m = MpTcpNumerics(topology)
+    common_cmd = " --duration 80 "
 
     # assert( "default" in m.subflows )
 
-    # first run on a normal cycle
-    # cmd = ""
-    # result = m.do_optbuffer(cmd)
-    # m.config["sender"]["scheduler"] = "GreedySchedulerIncreasingFOWD"
-    # result.update({"name": m.config["name"] + " Increasing"})
-    # writer.writerow(result)
+    # def  arrow up f176
+    # Sorting fowd from small to big
+    ######################################
+    cmd = common_cmd + ""
+    result = m.do_optbuffer(cmd)
+    m.config["sender"]["scheduler"] = "GreedySchedulerIncreasingFOWD"
 
-    # second run try
+    # http://fontawesome.io/icon/long-arrow-down/
+    # f175
+    result.update({"name": m.config["name"] + " inc."})
+    # don't forget to set a proper font !
+    # result.update({"name": m.config["name"] + u"\f175"})
+    writer.writerow(result)
+
+    # Sorting fowd from big to small
+    ######################################
 
     m = MpTcpNumerics(topology)
     m.config["sender"]["scheduler"] = "GreedySchedulerDecreasingFOWD"
-    cmd= ""
+    cmd = common_cmd + ""
     result = m.do_optbuffer(cmd)
-    result.update({"name": m.config["name"] + " + decreasing"})
+    # result.update({"name": m.config["name"] + " decreasing"})
+    result.update({"name": m.config["name"] + " dec."})
     writer.writerow(result)
 
-    # original order
-    # m = MpTcpNumerics(topology)
-    # m.config["sender"]["scheduler"] = "GreedyScheduler"
-    # cmd= ""
-    # result = m.do_optbuffer(cmd)
-    # result.update({"name": m.config["name"] + " inorder"})
-    # writer.writerow(result)
+    # Sorted by subflow name 
+    ######################################
+    m = MpTcpNumerics(topology)
+    m.config["sender"]["scheduler"] = "GreedyScheduler"
+    cmd= common_cmd + ""
+    result = m.do_optbuffer(cmd)
+    result.update({"name": m.config["name"] + " rand."})
+    writer.writerow(result)
 
 
 def find_necessary_buffer_for_topology(

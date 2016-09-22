@@ -169,6 +169,7 @@ class MpTcpNumerics(cmd.Cmd):
         return max(lcm, minimum)
         # sp.lcm(rtt)
 
+
     def do_optbuffer(self, args):
         """
         One of the main user function
@@ -201,13 +202,26 @@ class MpTcpNumerics(cmd.Cmd):
             help=("Force a simulation duration")
         )
 
+        log.info("Parsing user input [%s]" % args)
         args = parser.parse_args(shlex.split(args))
 
         print("RTO", args.withstand_rto)
         # TODO set a minimum if rto
+        # fainting_subflow = self.subflows[args.withstand_rto[0]] if len(args.withstand_rto) else None
+        # min_duration = fainting_subflow.rto() + fainting_subflow.rtt + 1 if fainting_subflow else 0
+        # duration = self.compute_cycle_duration(min_duration)
+
+
         fainting_subflow = self.subflows[args.withstand_rto[0]] if len(args.withstand_rto) else None
-        min_duration = fainting_subflow.rto() + fainting_subflow.rtt + 1 if fainting_subflow else 0
-        duration = self.compute_cycle_duration(min_duration)
+        if args.duration is None:
+            
+            min_duration = fainting_subflow.rto() + fainting_subflow.rtt + 1 if fainting_subflow else 0
+            duration = self.compute_cycle_duration(min_duration)
+        else:
+            log.info("User forced a duration")
+            duration = args.duration
+
+
         sim = self.run_cycle(duration, fainting_subflow)
 
         # NOTE: this also sets the objective
@@ -294,6 +308,15 @@ class MpTcpNumerics(cmd.Cmd):
                 "")
         )
 
+        # TODO use 2* RTT
+        # sub_cwnd.add_argument('--withstand-fast-retransmit', nargs=1, action="append",
+        #     default=[],
+        #     # metavar="SUBFLOW",
+        #     help=("Find a combination of congestion windows that can withstand "
+        #         " (continue to transmit) even under the worst RTO possible"
+        #         "")
+        # )
+
         sub_cwnd.add_argument('--duration', action="store",
             default=None,
             type=int,
@@ -319,16 +342,16 @@ class MpTcpNumerics(cmd.Cmd):
 
         args = sub_cwnd.parse_args(shlex.split(args))
 
-        # TODO support RTO
+
+        fainting_subflow = self.subflows[args.withstand_rto[0]] if len(args.withstand_rto) else None
         if args.duration is None:
             
-            fainting_subflow = self.subflows[args.withstand_rto[0]] if len(args.withstand_rto) else None
             min_duration = fainting_subflow.rto() + fainting_subflow.rtt + 1 if fainting_subflow else 0
             duration = self.compute_cycle_duration(min_duration)
         else:
             duration = args.duration
 
-        sim = self.run_cycle(duration)
+        sim = self.run_cycle(duration, fainting_subflow)
 
         # TODO s'il y a le spread, il faut relancer le processus d'optimisation avec la contrainte
         pb = problem.ProblemOptimizeCwnd(
@@ -452,20 +475,30 @@ class MpTcpNumerics(cmd.Cmd):
 
         capabilities = self.j["capabilities"]
 
-        # TODO pass as an argument ?
-        sym_rcv_wnd = sp.Symbol(SymbolNames.ReceiverWindow.value, positive=True)
+        # TODO being able to simulate scenarii where sndbufmax and rcvbufmax
+        # are of different sizes
+        sym_rcvbufmax = sp.Symbol(SymbolNames.ReceiverWindow.value, positive=True)
+        # sym_sndbufmax = sp.Symbol(SymbolNames.SndBufMax.value, positive=True)
 
-        receiver = MpTcpReceiver(sym_rcv_wnd, capabilities, self.j, self.subflows)
+        receiver = MpTcpReceiver(sym_rcvbufmax, capabilities, self.j, self.subflows)
 
         scheduler_name = self.j["sender"].get("scheduler", "GreedySchedulerIncreasingFOWD")
         class_ = getattr(importlib.import_module("mptcpnumerics.scheduler"), scheduler_name)
         scheduler = class_()
         print("Set scheduler to %s" % scheduler)
         # dict not needed anymore ?
-        sender = MpTcpSender(sym_rcv_wnd, self.j["sender"]["snd_buffer"], subflows=dict(self.subflows), scheduler=scheduler)
+        log.warn("Setting sender max buffer size equal to to the receiver's")
+        sender = MpTcpSender(
+                sym_rcvbufmax,
+                # instead of self.j["sender"]["snd_buffer"], 
+                # we make the send and receive buffer max size equal
+                # it would need more work to get both 
+                sym_rcvbufmax, 
+                subflows=dict(self.subflows),
+                scheduler=scheduler
+                )
 
         # TODO fix duration
-
         sim = Simulator(self.j, sender, receiver)
 
         # we start sending a full window over each path

@@ -3,6 +3,7 @@ from enum import Enum
 
 class SymbolNames(Enum):
     ReceiverWindow = "rcv_wnd"
+    SndBufMax = "sndbufmax"
 
 # to have a common convention between 
 def generate_mss_name(name):

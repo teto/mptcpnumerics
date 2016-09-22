@@ -1,13 +1,11 @@
 {
-	"name": "test00",
+	"name": "test_0",
 	"sender": {
 		"scheduler": "default",
 		"snd_buffer": 40,
-		"capabilities": ["NR-SACK"]
 	},
 	"receiver": {
 		"rcv_buffer": 40,
-		"capabilities": ["NR-SACK"]
 	},
 	"capabilities": ["NR-SACK"],
 	"subflows": {
@@ -18,8 +16,6 @@
 			"var": 10,
 			"fowd": 20,
 			"bowd": 20,
-			"loss": 0.05,
-			"contribution": 0.5
 		},
 		"fast": {
 			"cwnd": 15,
@@ -27,8 +23,6 @@
 			"var": 10,
 			"fowd": 10,
 			"bowd": 30,
-			"loss": 0.05,
-			"contribution": 0.5
 		}
 	}
 }
