@@ -35,8 +35,6 @@ class MpTcpSubflow:
         """
         In this simulator, the cwnd is considered as constant, at its maximum.
         Hence the value given here will remain
-
-
         """
         # self.sender = sender
             # loaded_cwnd = sf_dict.get("cwnd", self.rcv_wnd)

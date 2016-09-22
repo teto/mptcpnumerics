@@ -20,8 +20,10 @@ IMPORTANT: all subflows must be named sfX (sf0, sf1 etc...)
 """
 # file,name, cmd
 cmds = [
-        ("cwnd2.json", "Limit subflow0 contribution to 40%", " --sfmax sf0 0.4"),
+        ("cwnd2.json", "Experiment 1", " --sfmax sf0 0.4"), # Limit subflow0 contribution to 40%
+        ("cwnd2.json", "Experiment 2", " --sfmin sf1 0.4"), # Enforce a 60% contribution on subflow 1
         ("cwnd2.json", "No constraints", ""),
+        # ("cwnd3.json", "No constraints", ""),
         # ("examples/mono.json", ""),
         # ("duo.json", )
         ]
@@ -87,6 +89,7 @@ def plot_cwnds(csv_filename, out="output.png"):
     print("after", df.columns)
 
     print(df)
+    # can make figure bigger
     fig = plt.figure()
 
     axes = fig.gca()
@@ -113,43 +116,52 @@ def plot_cwnds(csv_filename, out="output.png"):
     # filename =  os.path.join(os.getcwd(), os.path.basename(filename))
     # logger.info
     print("Saving into %s" % (out))
+    # dpi=800
     fig.savefig(out)
 
 
 
 
-def iterate_over_fowd(topology, sf_name: str, step: int):
+def same_rtt_different_fowd(
+        base_topology, 
+        sf_name: str,
+        step: int,
+        results_output
+        ):
     """
     sf_name = subflow name to iterate over with
     TODO transfomr this into a function that generates json files !
-
     """
     m = MpTcpNumerics()
     # j = m.do_load_from_file("")
     # "examples/double.json"
-    with open(topology) as cfg_fd:
+    with open(base_topology) as cfg_fd:
         # you can use object_hook to check that everything is in order
         j = json.load(cfg_fd, ) # object_hook=validate_config)
         # use pprint ?
         # log.debug(j)
-        print(j)
-    print(j)
+        assert len(j.subflows.keys()) == 1, "Need only one subflow"
+    print("Loaded topology:", j)
 
-    with open(output0, "w+") as rfd:
+    # first step generate topologies
+
+
+
+    with open(results_output, "w+") as rfd:
 
         # we need to make a copy of the dict
-        toto = m.config = copy.deepcopy(j)
+        m.config = copy.deepcopy(j)
 
         # skips do_load_from_file to
-        print("current config", j)
+        # print("current config", j)
         # look for biggest rtt
-        sf_max_rtt =  -110000
-        sf_max_rtt_name =  None
-        for sf_name, sf in m.subflows.items():
-            current_rtt = sf.rtt() # conf["fowd"] + conf ["bowd"]
-            if sf_max_rtt is None or current_rtt > sf_max_rtt:
-                sf_max_rtt = current_rtt
-                sf_max_rtt_name = sf_name
+        # sf_max_rtt =  -110000
+        # sf_max_rtt_name =  None
+        # for sf_name, sf in m.subflows.items():
+        #     current_rtt = sf.rtt # conf["fowd"] + conf ["bowd"]
+        #     if sf_max_rtt is None or current_rtt > sf_max_rtt:
+        #         sf_max_rtt = current_rtt
+        #         sf_max_rtt_name = sf_name
 
         print("max RTT %d from subflow %s"%( sf_max_rtt, sf_max_rtt_name))
 
@@ -160,12 +172,14 @@ def iterate_over_fowd(topology, sf_name: str, step: int):
             # j["subflows"]["bowd"] = sf_max_rtt - fowd
             m.config = copy.deepcopy(j)
 
-            config_filename = "step_fowd_%dms.json" % fowd
+            config_filename = "%s_step_fowd_%dms.json" % (base_topology, fowd)
             with open(config_filename, "w+") as config_fd:
                 print(j)
-                json.dump(j, config_fd) # m.subflows) # .__dict__
+                # indent => pretty printing ?
+                json.dump(j, config_fd, indent=4) # m.subflows) # .__dict__
 
-            result = m.do_optcwnd("")
+            # result = m.do_optcwnd("")
+            result = m.do_optbuffer("")
             result.update({'config_filename': config_filename})
             writer.writerow(result)
 

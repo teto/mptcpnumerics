@@ -1,6 +1,7 @@
 {
 	"name": "test00",
 	"sender": {
+		"scheduler": "default",
 		"snd_buffer": 40,
 		"capabilities": ["NR-SACK"]
 	},

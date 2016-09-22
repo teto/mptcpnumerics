@@ -15,15 +15,7 @@ log.setLevel(logging.DEBUG)
 # # %(asctime)s - %(name)s - %
 
 """
-Liste des tests a faire,
-on fait evoluer le owd
-
-
-Pour pouvoir comparer avec ou sans notre logiciel, il faudra etre capable
-de mettre en dur la cwnd
-
-par exemple si on veut utiliser tous les sous flots
-able to quantif
+TODO compare with official advised buffer size
 
 asciicinema rec, and to close, exit the shell
 
@@ -36,13 +28,21 @@ step = 5 # milliseconds
 
 
 # TODO here we should use tuples with one saying which 
-topologies = [
-    # "examples/mono.json",
-    ("duo.json", "default"),
-    ("triplet.json", "default"),
-    ("quatuor.json", "default"),
-    ("6.json", "default"),
-    ]
+different_sf_nb_topologies = [
+        # "examples/mono.json",
+        ("duo.json", "default"),
+        ("triplet.json", "default"),
+        ("quatuor.json", "default"),
+        ("6.json", "default"),
+        ]
+
+same_rtt_different_fowd_topologies = [
+        # "examples/mono.json",
+        ("duo.json", "default"),
+        ("triplet.json", "default"),
+        ("quatuor.json", "default"),
+        ("6.json", "default"),
+        ]
 
 asymetric = [
     ("asymetric.json", "slow"),
@@ -51,7 +51,8 @@ asymetric = [
     ]
 
 # topology0 = "examples/double.json"
-output1 = "buffers.csv"
+output0 = "buffers_scheduler.csv"
+output1 = "buffers_rto.csv"
 png_output = "results_buffer.png"
 # j = json.loads("examples/double.json")
 
@@ -107,67 +108,11 @@ def plot_buffers(csv_filename, out="output.png"):
     print("Saving into %s" % (out))
     fig.savefig(out)
 
-def iterate_over_fowd(topology, sf_name: str, step: int):
-    """
-    sf_name = subflow name to iterate over with
-
-    """
-    m = MpTcpNumerics()
-    # j = m.do_load_from_file("")
-    # "examples/double.json"
-    with open(topology) as cfg_fd:
-        # you can use object_hook to check that everything is in order
-        j = json.load(cfg_fd, ) # object_hook=validate_config)
-        # use pprint ?
-        # log.debug(j)
-        print(j)
-    print(j)
-
-    with open(output0, "w+") as rfd:
-
-        # we need to make a copy of the dict
-        m.config = copy.deepcopy(j)
-
-        # skips do_load_from_file to
-        print("current config", j)
-        # look for biggest rtt
-        sf_max_rtt =  -110000
-        sf_max_rtt_name =  None
-        for sf_name, sf in m.subflows.items():
-            current_rtt = sf.rtt() # conf["fowd"] + conf ["bowd"]
-            if sf_max_rtt is None or current_rtt > sf_max_rtt:
-                sf_max_rtt = current_rtt
-                sf_max_rtt_name = sf_name
-
-        print("max RTT %d from subflow %s"%( sf_max_rtt, sf_max_rtt_name))
-
-
-        for fowd in range(step, sf_max_rtt, step):
-            print("TODO update J config")
-            # MAJ le fowd, on devrait corriger le bowd
-            j["subflows"][sf_name]["fowd"] = fowd
-            # j["subflows"]["bowd"] = sf_max_rtt - fowd
-            m.config = copy.deepcopy(j)
-
-            config_filename = "step_fowd_%dms.json" % fowd
-            with open(config_filename, "w+") as config_fd:
-                print(j)
-                json.dump(j, config_fd) # m.subflows) # .__dict__
-
-            result = m.do_optcwnd("")
-            result.update({'config_filename': config_filename})
-            #     writer = csv.DictWriter(rfd, fieldnames=result.keys())
-            #     writer.writeheader() #
-
-            writer.writerow(result)
-
-    # TODO save the results in some tempdir
-# j["subflows"]["slow"]["fowd"]
-# j["subflows"]["slow"]["fowd"]
 
 def find_necessary_buffer_for_topologies(
-    topology, 
-    output="buffer.csv"
+    topologies, 
+    output,
+    func
     ):
 
     with open(output, "w+") as rfd:
@@ -182,7 +127,50 @@ def find_necessary_buffer_for_topologies(
         writer.writeheader()
 
         for topology, rto_subflow in topologies:
-            find_necessary_buffer_for_topology(topology, rto_subflow, writer)
+            func(topology, rto_subflow, writer)
+
+
+
+def find_buffer_per_scheduler(
+    topology, 
+    fainting_subflow,
+    writer
+    ):
+    """
+    Add a subflow identical to the first several times 'till max_nb_of_subflows
+    - with parameters to overcome an RTO
+
+    The topology MUST contain a subflow called "default" that will be qualified as 
+    entering RTO
+    """
+    m = MpTcpNumerics(topology)
+
+    assert( "default" in m.subflows )
+
+    # first run on a normal cycle
+    cmd = ""
+    result = m.do_optbuffer(cmd)
+    m.config["sender"]["scheduler"] = "GreedySchedulerIncreasingFOWD"
+    result.update({"name": m.config["name"] + " Increasing"})
+    writer.writerow(result)
+
+    # second run try
+
+    m = MpTcpNumerics(topology)
+    m.config["sender"]["scheduler"] = "GreedySchedulerDecreasingFOWD"
+    cmd= ""
+    result = m.do_optbuffer(cmd)
+    result.update({"name": m.config["name"] + " + decrasing"})
+    writer.writerow(result)
+
+    # original order
+    m = MpTcpNumerics(topology)
+    # m.config["sender"]["scheduler"] = "GreedySchedulerIncreasingFOWD"
+    cmd= ""
+    result = m.do_optbuffer(cmd)
+    result.update({"name": m.config["name"] + " inorder"})
+    writer.writerow(result)
+
 
 def find_necessary_buffer_for_topology(
     topology, 
@@ -197,22 +185,12 @@ def find_necessary_buffer_for_topology(
     entering RTO
     """
     m = MpTcpNumerics(topology)
-    # for topology in topologies:
-    # with open(topology) as cfg_fd:
-    #     # you can use object_hook to check that everything is in order
-    #     j = json.load(cfg_fd, ) # object_hook=validate_config)
-    #     print(j)
-    # print(j)
-
-    # m.do_load_from_file(topology)
 
     assert( "default" in m.subflows )
-
 
     # first run on a normal cycle
     cmd = ""
     result = m.do_optbuffer(cmd)
-    # m.config["name"]
     result.update({"name": m.config["name"] })
     # if writer is None:
     #     writer = csv.DictWriter(rfd, fieldnames=result.keys())
@@ -239,9 +217,11 @@ if __name__ == '__main__':
     
     args, extra = parser.parse_known_args()
 
-    find_necessary_buffer_for_topologies(topologies, output1)
+    find_necessary_buffer_for_topologies(same_rtt_different_fowd_topologies, output0, find_buffer_per_scheduler)
+    # find_necessary_buffer_for_topologies(different_sf_nb_topologies, output1, find_necessary_buffer_for_topology)
     if args.plot:
-        plot_buffers(output1, png_output)
+        # change with output1 when needed
+        plot_buffers(output0, png_output)
     if args.display:
         os.system("xdg-open %s" % png_output)
 

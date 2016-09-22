@@ -15,6 +15,7 @@ import sortedcontainers
 import pulp as pu
 import pprint
 from . import SubflowState
+from .scheduler import Scheduler
 # from . import problem
 
 log = logging.getLogger("mptcpnumerics")
@@ -301,12 +302,13 @@ class MpTcpSender:
         subflows: is a dict( subflow_name, MpTcpSubflow)
         _snd_next: Next #seq to send
         rcv_wnd: 
+        scheduler
     """
     # subflow congestion windows
     # need to have dsn, cwnd, outstanding ?
 
     # TODO maintain statistics about the events and categorize them by HOLTypes
-    def __init__(self, rcv_wnd, snd_buffer, subflows, scheduler):
+    def __init__(self, rcv_wnd, snd_buffer, subflows, scheduler : Scheduler):
         """
         Args:
             rcv_wnd: is a sympy symbol
@@ -318,8 +320,9 @@ class MpTcpSender:
 
         self.scheduler = scheduler 
         self._snd_next = 0    # left edge of the window/dsn (rename to snd_una ?) 
-        self.snd_una = 0
+        self._snd_una = 0
         self.rcv_wnd = rcv_wnd
+        self.scheduler = scheduler
 
         # self.bytes_sent = 0
         # """total bytes sent at the mptcp level, i.e., different bytes"""
@@ -327,8 +330,17 @@ class MpTcpSender:
         """Constraints (head of line blocking, flow control) are saved with sympy symbols. """
 
         self.subflows = subflows
+        log.info("Sender with scheduler %s" % self.scheduler)
         print(self.subflows)
 
+    @property
+    def snd_una(self):
+        return self._snd_una
+
+    @snd_una.setter
+    def snd_una(self, value):
+        log.debug("UPDATE snd_una to %s", value)
+        self._snd_una = value
 
     @property
     def snd_next(self):
@@ -364,21 +376,21 @@ class MpTcpSender:
         # y ajouter la contrainte
         self.constraints.append(c)
 
-    def send(self):
+    def send(self, fainting_subflow=None):
         """
         Rely on the scheduler
         """
         # TODO depends on self.scheduler ?
-        packets = []
-        for name, sf in self.subflows.items():
-            # if not sf.busy():
-            if sf.can_send():
-                pkt = self.send_on_subflow(name)
-                packets.append(pkt)
-            else:
-                log.debug("can't send on subflow")
-
-        return packets
+        # packets = []
+        # for name, sf in self.subflows.items():
+        #     # if not sf.busy():
+        #     if sf.can_send():
+        #         pkt = self.send_on_subflow(name)
+        #         packets.append(pkt)
+        #     else:
+        #         log.debug("can't send on subflow")
+        # return packets
+        return self.scheduler.send(self, fainting_subflow)
 
 
     # def retransmit(self, sf_id, dsn):
@@ -483,6 +495,7 @@ class MpTcpSender:
         print( p.dack > self.snd_una )
         if p.dack > self.snd_una:
             self.rcv_wnd = p.rcv_wnd
+            self.snd_una = p.dack
         elif p.rcv_wnd > self.rcv_wnd:
             self.rcv_wnd = p.rcv_wnd
         else:

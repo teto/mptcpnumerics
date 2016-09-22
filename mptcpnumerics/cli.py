@@ -21,6 +21,7 @@ import pprint
 import shlex
 from .topology import MpTcpSubflow
 from .analysis import MpTcpReceiver, MpTcpSender, Simulator
+import importlib
 from . import problem
 from . import SymbolNames
 # from voluptuous import Required, All, Length, Range
@@ -194,6 +195,12 @@ class MpTcpNumerics(cmd.Cmd):
                 "")
         )
 
+        parser.add_argument('--duration', action="store",
+            default=None,
+            type=int,
+            help=("Force a simulation duration")
+        )
+
         args = parser.parse_args(shlex.split(args))
 
         print("RTO", args.withstand_rto)
@@ -280,11 +287,17 @@ class MpTcpNumerics(cmd.Cmd):
         )
 
         sub_cwnd.add_argument('--withstand-rto', nargs=1, action="append",
-            default=None,
+            default=[],
             # metavar="SUBFLOW",
             help=("Find a combination of congestion windows that can withstand "
                 " (continue to transmit) even under the worst RTO possible"
                 "")
+        )
+
+        sub_cwnd.add_argument('--duration', action="store",
+            default=None,
+            type=int,
+            help=("Force a simulation duration")
         )
 
         sub_cwnd.add_argument('--output','-o', action="store",
@@ -307,7 +320,14 @@ class MpTcpNumerics(cmd.Cmd):
         args = sub_cwnd.parse_args(shlex.split(args))
 
         # TODO support RTO
-        duration = self.compute_cycle_duration()
+        if args.duration is None:
+            
+            fainting_subflow = self.subflows[args.withstand_rto[0]] if len(args.withstand_rto) else None
+            min_duration = fainting_subflow.rto() + fainting_subflow.rtt + 1 if fainting_subflow else 0
+            duration = self.compute_cycle_duration(min_duration)
+        else:
+            duration = args.duration
+
         sim = self.run_cycle(duration)
 
         # TODO s'il y a le spread, il faut relancer le processus d'optimisation avec la contrainte
@@ -436,7 +456,12 @@ class MpTcpNumerics(cmd.Cmd):
         sym_rcv_wnd = sp.Symbol(SymbolNames.ReceiverWindow.value, positive=True)
 
         receiver = MpTcpReceiver(sym_rcv_wnd, capabilities, self.j, self.subflows)
-        sender = MpTcpSender(sym_rcv_wnd, self.j["sender"]["snd_buffer"], subflows=dict(self.subflows), scheduler=None)
+
+        scheduler_name = self.j["sender"].get("scheduler", "GreedySchedulerIncreasingFOWD")
+        class_ = getattr(importlib.import_module("mptcpnumerics.scheduler"), scheduler_name)
+        scheduler = class_()
+        # dict not needed anymore ?
+        sender = MpTcpSender(sym_rcv_wnd, self.j["sender"]["snd_buffer"], subflows=dict(self.subflows), scheduler=scheduler)
 
         # TODO fix duration
 
@@ -445,27 +470,30 @@ class MpTcpNumerics(cmd.Cmd):
         # we start sending a full window over each path
             # sort them depending on fowd
         log.info("Initial send")
+        events = sender.send(fainting_subflow)
+        for event in events:
+            sim.add(event)
         # subflows = sender.subflows.values()
         # TODO we should send on the fainting subflow first
-        ordered_subflows = sorted(self.subflows.values(), key=lambda x: x.fowd, reverse=True)
+        # ordered_subflows = sorted(self.subflows.values(), key=lambda x: x.fowd, reverse=True)
 
-        # global current_time
-        # here we just setup the system
-        for sf in ordered_subflows:
+        # # global current_time
+        # # here we just setup the system
+        # for sf in ordered_subflows:
 
-            # ca genere des contraintes
-            # pkt = sf.generate_pkt(0, sender.snd_next)
-            if not sf.can_send():
-                log.debug("%s can't send (s, skipping..." % sf.name)
-                continue
+        #     # ca genere des contraintes
+        #     # pkt = sf.generate_pkt(0, sender.snd_next)
+        #     if not sf.can_send():
+        #         log.debug("%s can't send (s, skipping..." % sf.name)
+        #         continue
             
-            pkt = sender.send_on_subflow(sf.name, )
-            print("<<< Comparing %s with %s " % (sf, fainting_subflow))
-            if sf == fainting_subflow:
-                event = sender.enter_rto(sf.name, pkt.dsn)
-                sim.add(event)
-            else:
-                sim.add(pkt)
+        #     pkt = sender.send_on_subflow(sf.name, )
+        #     print("<<< Comparing %s with %s " % (sf, fainting_subflow))
+        #     if sf == fainting_subflow:
+        #         event = sender.enter_rto(sf.name, pkt.dsn)
+        #         sim.add(event)
+        #     else:
+        #         sim.add(pkt)
 
         sim.stop(duration)
         sim.run()

@@ -1,6 +1,7 @@
 {
 	"name": "test00",
 	"sender": {
+		"scheduler": "toto",
 		"snd_buffer": 40,
 		"capabilities": ["NR-SACK"]
 	},
