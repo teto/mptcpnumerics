@@ -10,7 +10,7 @@
 	},
 	"capabilities": ["NR-SACK"],
 	"subflows": {
-		"sf0":
+		"a":
 		{
 			"cwnd": 20,
 			"mss": 1,
@@ -20,7 +20,7 @@
 			"loss": 0.05,
 			"contribution": 0.5
 		},
-		"sf1":
+		"b":
 		{
 			"cwnd": 20,
 			"mss": 1,

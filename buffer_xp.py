@@ -187,7 +187,7 @@ def find_buffer_per_scheduler(
     m.config["sender"]["scheduler"] = "GreedyScheduler"
     cmd= common_cmd + ""
     result = m.do_optbuffer(cmd)
-    result.update({"name": m.config["name"] + " rand."})
+    result.update({"name": m.config["name"] + " default"})
     writer.writerow(result)
 
 

@@ -21,10 +21,10 @@ IMPORTANT: all subflows must be named sfX (sf0, sf1 etc...)
 # file,name, cmd
 cmds = [
         ("cwnd2.json", "Sim. 1", ""),
-        ("cwnd2.json", "Sim. 2", " --sfmax sf0 0.4"), # Limit subflow0 contribution to 40%
-        ("cwnd2.json", "Sim. 3", " --sfmin sf1 0.6"), # Enforce a 60% contribution on subflow 1
-        ("xp/cwd4.json", "Sim. 4", "--sfmin sf0 0.1 --sfmin sf3 0.1 --sfmin sf2 0.1 --sfmin sf1 0.1 "),
-        ("xp/cwd4.json", "Sim. 5", "--sfmin sf0 0.2  --sfmin sf1 0.2 --sfmax sf3 0.1 --sfmin sf2 0.2"),
+        ("cwnd2.json", "Sim. 2", " --sfmax a 0.4"), # Limit subflow0 contribution to 40%
+        ("cwnd2.json", "Sim. 3", " --sfmin b 0.5"), # Enforce a 60% contribution on subflow 1
+        ("xp/cwd4.json", "Sim. 4", "--sfmin a 0.1 --sfmin d 0.1 --sfmin c 0.1 --sfmin b 0.1 "),
+        ("xp/cwd4.json", "Sim. 5", "--sfmin a 0.2  --sfmin b 0.2 --sfmax d 0.1 --sfmin c 0.2"),
         # ("examples/mono.json", ""),
         # ("duo.json", )
         ]
@@ -39,9 +39,14 @@ fieldnames = [
 # "cwnd_default"
 ]
 # 'cwnd_fast': 10.0, 'mss_fast': 1, 'rx_fast'
-for name in ["sf0", "sf1", "sf2", 
+subflow_names = [
+        "sf0", "sf1", "sf2", 
         "sf3", "sf4", "sf5", 
-        "sf6"]:
+        "sf6"
+        ]
+
+subflow_names = ["a", "b", "c", "d", "e", "f"]
+for name in subflow_names:
     for prefix in ["cwnd", "mss", "rx" , "contrib"]:
         fieldnames.append(prefix + "_" + name)
 
@@ -112,7 +117,7 @@ def plot_cwnds(csv_filename, out="output.png"):
 
     # fig.suptitle("With constraints", fontsize=12)
 
-    axes.set_ylabel("Proportion(s)")
+    axes.set_ylabel("Throughput in blue (MSS/ms) and subflow contributions (%)")
     axes.set_xlabel("")
 
 

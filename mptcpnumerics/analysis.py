@@ -714,15 +714,15 @@ class MpTcpReceiver:
         # print("packet size=%s", p.size)
         self.subflows[p.subflow_id].rx += p.size
 
-        if MpTcpCapabilities.DAckReplication in self.config["receiver"]["capabilities"]:
-            # for sf in self.subflows:
-            #     self.generate_ack()
-            #     e.subflow = p.subflow
-            #     packets.append(e)
-            pass
-        else:
-            e = self.generate_ack(p.subflow_id)
-            packets.append(e)
+        # if MpTcpCapabilities.DAckReplication in self.config["receiver"]["capabilities"]:
+        #     # for sf in self.subflows:
+        #     #     self.generate_ack()
+        #     #     e.subflow = p.subflow
+        #     #     packets.append(e)
+        #     pass
+        # else:
+        e = self.generate_ack(p.subflow_id)
+        packets.append(e)
 
         # print(packets)
         return packets

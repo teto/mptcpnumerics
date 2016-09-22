@@ -459,21 +459,8 @@ class MpTcpNumerics(cmd.Cmd):
 
         log.info("run_cycle")
 
-        # for sf_dict in self.j["subflows"]:
-        #     print("test", sf_dict)
-        #     # self.sp_cwnd = sp.IndexedBase("cwnd_{name}")
-        #     # upper_bound = min(self.snd_buf_max, self.rcv_wnd)
-        #     # cwnd has to be <= min(rcv_buf, snd_buff) TODO add
-        #     # upper_bound = self.rcv_wnd
-        #     # subflow = MpTcpSubflow( upper_bound=upper_bound, **sf_dict)
-        #     subflow = MpTcpSubflow(
-        #         # upper_bound=upper_bound,
-        #         **sf_dict
-        #     )
-
-        #     subflows.update({sf_dict["name"]: subflow})
-
-        capabilities = self.j["capabilities"]
+        # disabled because unused
+        capabilities = [] # self.j["capabilities"]
 
         # TODO being able to simulate scenarii where sndbufmax and rcvbufmax
         # are of different sizes

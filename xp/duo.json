@@ -2,13 +2,11 @@
 	"name": "2",
 	"sender": {
 		"snd_buffer": 40,
-		"capabilities": ["NR-SACK"]
+		"scheduler": "GreedyScheduler"
 	},
 	"receiver": {
-		"rcv_buffer": 40,
-		"capabilities": ["NR-SACK"]
+		"rcv_buffer": 40
 	},
-	"capabilities": ["NR-SACK"],
 	"subflows": {
 		"a":
 		{
@@ -17,8 +15,7 @@
 			"var": 10,
 			"fowd": 19,
 			"bowd": 21,
-			"loss": 0.05,
-			"contribution": 0.5
+			"loss": 0.05
 		},
 		"b":
 		{
@@ -27,8 +24,7 @@
 			"var": 10,
 			"fowd": 20,
 			"bowd": 20,
-			"loss": 0.05,
-			"contribution": 0.5
+			"loss": 0.05
 		}
 	}
 }
