@@ -38,10 +38,10 @@ different_sf_nb_topologies = [
 
 same_rtt_different_fowd_topologies = [
         # "examples/mono.json",
-        ("duo.json", "default"),
-        ("triplet.json", "default"),
-        ("quatuor.json", "default"),
-        ("6.json", "default"),
+        ("xp/duo.json", "default"),
+        # ("xp/triplet.json", "default"),
+        # ("xp/quatuor.json", "default"),
+        # ("xp/6.json", "default"),
         ]
 
 asymetric = [
@@ -145,14 +145,14 @@ def find_buffer_per_scheduler(
     """
     m = MpTcpNumerics(topology)
 
-    assert( "default" in m.subflows )
+    # assert( "default" in m.subflows )
 
     # first run on a normal cycle
-    cmd = ""
-    result = m.do_optbuffer(cmd)
-    m.config["sender"]["scheduler"] = "GreedySchedulerIncreasingFOWD"
-    result.update({"name": m.config["name"] + " Increasing"})
-    writer.writerow(result)
+    # cmd = ""
+    # result = m.do_optbuffer(cmd)
+    # m.config["sender"]["scheduler"] = "GreedySchedulerIncreasingFOWD"
+    # result.update({"name": m.config["name"] + " Increasing"})
+    # writer.writerow(result)
 
     # second run try
 
@@ -160,16 +160,16 @@ def find_buffer_per_scheduler(
     m.config["sender"]["scheduler"] = "GreedySchedulerDecreasingFOWD"
     cmd= ""
     result = m.do_optbuffer(cmd)
-    result.update({"name": m.config["name"] + " + decrasing"})
+    result.update({"name": m.config["name"] + " + decreasing"})
     writer.writerow(result)
 
     # original order
-    m = MpTcpNumerics(topology)
-    # m.config["sender"]["scheduler"] = "GreedySchedulerIncreasingFOWD"
-    cmd= ""
-    result = m.do_optbuffer(cmd)
-    result.update({"name": m.config["name"] + " inorder"})
-    writer.writerow(result)
+    # m = MpTcpNumerics(topology)
+    # m.config["sender"]["scheduler"] = "GreedyScheduler"
+    # cmd= ""
+    # result = m.do_optbuffer(cmd)
+    # result.update({"name": m.config["name"] + " inorder"})
+    # writer.writerow(result)
 
 
 def find_necessary_buffer_for_topology(

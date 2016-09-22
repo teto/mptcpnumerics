@@ -3,6 +3,7 @@
 # from .analysis import MpTcpSender
 
 import logging
+from collections import OrderedDict
 
 log = logging.getLogger("mptcpnumerics")
 
@@ -34,9 +35,27 @@ class GreedyScheduler(Scheduler):
         Attrs:
             sender (MpTcpSender):
         """
+        log.debug("Scheduler.send ")
 
         # one can use sorted or list.sort for inplace sorting
-        ordered_subflows = sorted(sender.subflows.values(), key=lambda x: x.fowd, reverse=self.increasing_order)
+        print("TYPE=", type(sender.subflows))
+        # ordered_subflows = OrderedDict(sender.subflows)
+        # print("SUBFLOW_LIST", subflows)
+        # dictionary sorted by key
+        # OrderedDict(sorted(d.items(), key=lambda t: t[0]))
+        #an ordered dictionary remembers its insertion order,
+        if self.increasing_order is not None:
+            ordered_subflows = sorted(sender.subflows.values(), key=lambda x: x.fowd, reverse=self.increasing_order)
+            print("ordered by fowd") #, type(subflow_list))
+        else:
+            print("ordered by key")
+            ordered_subflows = OrderedDict(sorted(sender.subflows.items(), key=lambda t: t[0]))
+            ordered_subflows = ordered_subflows.values()
+        print("TYPE2=", type(ordered_subflows))
+
+        print("SCHEDULING ORDER")
+        for order, sf in enumerate(ordered_subflows):
+            print("%d: %s" % (order, sf.name))
 
         events = []
         # global current_time

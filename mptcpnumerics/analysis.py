@@ -244,9 +244,9 @@ class Event:
         self.special = []
 
     def __str__(self):
-        return "Scheduled at {s.time} dest={dest}".format(
+        return "Scheduled with delay {s.delay} ".format(
             s=self,
-            dest="??" # if self.direction == Direction.Sender else "Receiver",
+            # dest="??" # if self.direction == Direction.Sender else "Receiver",
         )
 
 
@@ -348,7 +348,7 @@ class MpTcpSender:
 
     @snd_next.setter
     def snd_next(self, value):
-        log.debug("UPDATE snd_next to %s", value)
+        log.debug("SETTING snd_next to %s", value)
         self._snd_next = value
 
     def inflight(self):
@@ -358,7 +358,7 @@ class MpTcpSender:
         inflight = 0
         for sf_id, sf in self.subflows.items():
             if sf.state == SubflowState.WaitingAck:
-                inflight += sf.sp_cwnd
+                inflight += sf.sp_cwnd * sf.sp_mss
         # sum(filter(lambda x: x.cwnd if x.inflight), self.subflows)
         return inflight
 
@@ -380,6 +380,7 @@ class MpTcpSender:
         """
         Rely on the scheduler
         """
+        log.info("Subflow send  with fainting sf %s" % fainting_subflow)
         # TODO depends on self.scheduler ?
         # packets = []
         # for name, sf in self.subflows.items():
@@ -415,7 +416,7 @@ class MpTcpSender:
         """
         print("subflow state", self.subflows[sf_id].state)
 
-        log.debug("Sending on subflow [%s]" % sf_id)
+        log.debug("send_on_subflow for [%s]" % sf_id)
 
         retransmit = True if retransmit_dsn is not None else False
         if retransmit:
@@ -427,12 +428,16 @@ class MpTcpSender:
             pkt = self.subflows[sf_id].generate_pkt(dsn)
         else:
             assert self.subflows[sf_id].state == SubflowState.Available
+
+            # Compute cwnd before sending the packets
+            available_window = self.available_window()
+
             dsn = self.snd_next
             pkt = self.subflows[sf_id].generate_pkt(dsn)
             self.snd_next += pkt.size
             # max(self.snd_next + pkt.size, self.snd_next)
+            log.debug("Sending on subflow [%s] packet %s" % (sf_id, pkt))
 
-            available_window = self.available_window()
             self.add_flow_control_constraint(pkt.size, available_window)
 
 
@@ -624,7 +629,10 @@ class MpTcpReceiver:
         tcp-rx-buffer.cc:Add
         removes packets from out of order buffer when they get in order
         """
-        # print(self.out_of_order)
+        log.debug("Starting updateing out_of_order (OOO)")
+        log.debug("Old list %s", self.out_of_order)
+        print("update_out_of_order")
+        # sort by dsn
         temp = sorted(self.out_of_order, key=lambda x : x[0])
         new_list = []
         # todo use size instead
@@ -635,15 +643,18 @@ class MpTcpReceiver:
                 )
             )
             if self.rcv_next == block.dsn:
+                # += ?
                 self.rcv_next = block.dsn + block.size
                 log.debug("rcv_next advanced")
                 # log.debug ("updated ")
             else:
-                log.debug("Appended to out of order blocks")
+                log.debug("Remaing OOO")
                 new_list.append(block)
 
         # swap old list with new one
         self.out_of_order = new_list
+        
+        log.debug("New list %s", self.out_of_order)
 
 
     def recv(self, p):
@@ -672,25 +683,30 @@ class MpTcpReceiver:
         # # if headSeq < self.rcv_next:
         #     headSeq = self.rcv_next
 
-        # if headSeq > self.rcv_next:
+        if headSeq > self.rcv_next:
+            log.debug("out of order packet %s" % p)
             # if programmed correctly all packets should be within bounds
             # if headSeq > self.right_edge():
             #     raise Exception("packet out of bounds")
             # assert headSeq < tailSeq
             # self.
-        block = OutOfOrderBlock(headSeq, p.size)
-        self.out_of_order.append ( block )
+            block = OutOfOrderBlock(headSeq, p.size)
+            self.out_of_order.append ( block )
+        elif headSeq == self.rcv_next:
+            log.debug("Inorder packet %s" % p)
+            self.rcv_next += p.size
+
         # else:
         #     self.rcv_next = tailSeq
             # print("Set rcv_next to ", self.rcv_next)
 
         self.update_out_of_order()
 
-        print("TODO: check against out of order list")
+        # print("TODO: check against out of order list")
 
 
         # we want to compute per_subflow throughput to know contributions
-        print("SIZE=%s", p.size)
+        # print("packet size=%s", p.size)
         self.subflows[p.subflow_id].rx += p.size
 
         if MpTcpCapabilities.DAckReplication in self.config["receiver"]["capabilities"]:

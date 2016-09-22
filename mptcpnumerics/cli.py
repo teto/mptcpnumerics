@@ -460,6 +460,7 @@ class MpTcpNumerics(cmd.Cmd):
         scheduler_name = self.j["sender"].get("scheduler", "GreedySchedulerIncreasingFOWD")
         class_ = getattr(importlib.import_module("mptcpnumerics.scheduler"), scheduler_name)
         scheduler = class_()
+        print("Set scheduler to %s" % scheduler)
         # dict not needed anymore ?
         sender = MpTcpSender(sym_rcv_wnd, self.j["sender"]["snd_buffer"], subflows=dict(self.subflows), scheduler=scheduler)
 
