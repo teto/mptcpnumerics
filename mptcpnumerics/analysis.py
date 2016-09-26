@@ -359,6 +359,9 @@ class MpTcpSender:
         return inflight
 
     def available_snd_window(self):
+        """
+        TODO express snd_buf_max
+        """
         # min(self.snd_buf_max, self.rcv_wnd)
         return self.rcv_wnd - self.inflight()
 

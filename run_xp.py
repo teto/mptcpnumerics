@@ -108,9 +108,13 @@ def plot_cwnds(csv_filename, out="output.png"):
     # data["objective"].hist(by="name", grid=True)
     # TODO drop all meaningless columns
     # data.drop()
+    # TODO plot  
+    # secondary_y = If a list/tuple, which columns to plot on secondary y-axis
     df.plot.bar(
         ax=axes,
         # column="objective", 
+        # TODO now I can plot it in MB
+        secondary_y=["objective"],
         legend=False,
         rot=0, 
     )
@@ -152,7 +156,6 @@ def same_rtt_different_fowd(
     print("Loaded topology:", j)
 
     # first step generate topologies
-
 
 
     with open(results_output, "w+") as rfd:

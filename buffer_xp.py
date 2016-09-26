@@ -60,8 +60,10 @@ png_output = "results_buffer.png"
 # j = json.loads("examples/double.json")
 
 delimiter = ","
+
+# CSV header
 fieldnames = [
-"rcv_next","duration","rcv_wnd","name",
+"rcv_next","duration","rcv_wnd","name", "topology", 
 # "mss_default","rx_default",
 "status","objective","throughput",
 # "cwnd_default"
@@ -76,11 +78,13 @@ def plot_buffers(csv_filename, out="output.png"):
 
     # Ca genere un graphe avec plein de caracteres bizarres
     # matplotlib.rc('font', family='FontAwesome')
-    fig = plt.figure()
+    # fig = plt.figure()
     # prop = FontProperties()
     # prop.set_file('STIXGeneral.ttf')
-
-    axes = fig.gca()
+    df_topologies = data.groupby("topology")
+    print("len=", len(df_topologies))
+    fig, axes = plt.subplots(nrows=1, ncols=3)
+    # axes = fig.gca()
     # print(d)
     # if not d.empty() :
     #     raise Exception("not everything optimal")
@@ -97,18 +101,25 @@ def plot_buffers(csv_filename, out="output.png"):
     # )
     # data = data.groupby("name", "objective")
     data.set_index("name", inplace=True)
-    data["objective"].plot.bar(
-            ax=axes,
-            legend=False,
-            # by="name"
-            # x= data["name"],
-            # y= data["objective"]
-            rot=0
-            )
+    # subplots=True
+    # use a cycle marker ?
+
+# 
+    # TODO we should also plot the RTOmax/fastretransmit buffer sizes
+    for idx, (topology, df) in enumerate(df_topologies):
+        df["objective"].plot.bar(
+                ax=axes[0,idx-1],
+                legend=False,
+                # subplots=True,
+                # by="name"
+                # x= data["name"],
+                # y= data["objective"]
+                rot=0
+                )
     fig.suptitle("", fontsize=12)
 
-    axes.set_ylabel("Required buffer sizes (MSS)")
-    axes.set_xlabel("")
+    # axes.set_ylabel("Required buffer sizes (MSS)")
+    # axes.set_xlabel("")
 
 
     # filename = "output.png" # os.path.join(os.getcwd(), filename)
@@ -165,7 +176,7 @@ def find_buffer_per_scheduler(
 
     # http://fontawesome.io/icon/long-arrow-down/
     # f175
-    result.update({"name": m.config["name"] + " inc."})
+    result.update({"topology": topology, "name": m.config["name"] + " inc."})
     # don't forget to set a proper font !
     # result.update({"name": m.config["name"] + u"\f175"})
     writer.writerow(result)
@@ -178,7 +189,7 @@ def find_buffer_per_scheduler(
     cmd = common_cmd + ""
     result = m.do_optbuffer(cmd)
     # result.update({"name": m.config["name"] + " decreasing"})
-    result.update({"name": m.config["name"] + " dec."})
+    result.update({"topology": topology, "name": m.config["name"] + " dec."})
     writer.writerow(result)
 
     # Sorted by subflow name 
@@ -187,7 +198,7 @@ def find_buffer_per_scheduler(
     m.config["sender"]["scheduler"] = "GreedyScheduler"
     cmd= common_cmd + ""
     result = m.do_optbuffer(cmd)
-    result.update({"name": m.config["name"] + " default"})
+    result.update({"topology": topology, "name": m.config["name"] + " default"})
     writer.writerow(result)
 
 
@@ -230,13 +241,17 @@ def find_necessary_buffer_for_topology(
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Run tests")
     # group = parser.add_argument_group('authentication')
+    parser.add_argument("-g", "--generate", action="store_true", help="Generate results")
     parser.add_argument("-p", "--plot", action="store_true", help="Generate a plot" )
     parser.add_argument("-d", "--display", action="store_true", default=False,
             help="Open generated picture" )
     
     args, extra = parser.parse_known_args()
 
-    find_necessary_buffer_for_topologies(same_rtt_different_fowd_topologies, output0, find_buffer_per_scheduler)
+
+    if args.generate:
+
+        find_necessary_buffer_for_topologies(same_rtt_different_fowd_topologies, output0, find_buffer_per_scheduler)
     # find_necessary_buffer_for_topologies(different_sf_nb_topologies, output1, find_necessary_buffer_for_topology)
     if args.plot:
         # change with output1 when needed
