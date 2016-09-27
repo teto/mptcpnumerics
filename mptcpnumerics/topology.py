@@ -11,6 +11,8 @@ from . import generate_rx_name, generate_cwnd_name, generate_mss_name, rto, Subf
 from .analysis import SenderEvent
 
 log = logging.getLogger(__name__)
+
+
 class MpTcpSubflow:
     """
     @author Matthieu Coudron
@@ -24,7 +26,10 @@ class MpTcpSubflow:
         sp_tx:  Symbolic) Sent bytes
         rx_bytes:(Symbolic) Received bytes
         _state : if packets are inflight or if it is timing out
-
+        fowd:  Forward One Way Delay (OWD)
+        bowd: Backward One Way Delay (OWD)
+        svar: smoothed variance (unused)
+        loss_rate: Unused
     """
 
     def __init__(self,
@@ -36,9 +41,7 @@ class MpTcpSubflow:
         In this simulator, the cwnd is considered as constant, at its maximum.
         Hence the value given here will remain
         """
-        # self.sender = sender
             # loaded_cwnd = sf_dict.get("cwnd", self.rcv_wnd)
-        # FREE
         # upper_bound = min( upper_bound, cwnd ) if cwnd else upper_bound
         # cwnd = pu.LpVariable (name, 0, upper_bound)
         # self.cwnd = cwnd
@@ -52,34 +55,18 @@ class MpTcpSubflow:
         self.sp_mss = sp.Symbol(generate_mss_name(name), positive=True)
         self.mss = mss
         self.sp_tx = 0
-
         self._rx_bytes = 0 # sp.Symbol(generate_rx_name(name), positive=True)
-
-        # self.mss = mss
-        print("%r" % self.sp_cwnd)
-
         self.name = name
 
-        # TODO
-        # self.inflight = False
         self._state = SubflowState.Available
         """
         This is a pretty crude simulator: it considers that all packets are sent
         at once, hence this boolean tells if the window is inflight
         """
-
-        # unused for now
-        self.svar = 10
-        """Smoothed variance"""
-
-        # forward and Backward one way delays
+        self.svar = var 
         self.fowd = fowd
-        """Forward One Way Delay (OWD)"""
         self.bowd = bowd
-        """Backward One Way Delay (OWD)"""
-
-        self.loss_rate = loss
-        """Unused"""
+        self.loss_rate = loss 
 
 
     @property
@@ -200,12 +187,19 @@ class MpTcpTopology:
     def load_topology(self,filename):
         """
         Args:
-            :param filename
+            filename:
         """
 
         log.info("Loading topology from %s" % filename )
         with open(filename) as filename:
             self.config = json.load(filename)
+
+    @property
+    def throughput(self):
+        """
+        Returns throughput (from file)
+        """
+        return self.cwnd_from_file * self.mss / self.rtt
 
     @property
     def rcv_buf(self):

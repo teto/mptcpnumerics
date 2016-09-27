@@ -107,7 +107,7 @@ setup(name="mptcpnumerics",
             # those dependancies might made optional later or the package split into two
           'sympy', #for symbolic computing
           'sortedcontainers', # for the mini mptcp simulator events list
-          'voluptuous', # for the mini mptcp simulator events list
+          # 'voluptuous', # for json validation
           'pulp',
           ],
       # for now the core is not modular enough so just check that running the process produces the same files

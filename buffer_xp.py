@@ -10,7 +10,7 @@ import os
 import matplotlib.pyplot as plt
 import matplotlib
 from matplotlib.font_manager import FontProperties
-
+from itertools import cycle
 
 log = logging.getLogger("mptcpnumerics")
 log.setLevel(logging.DEBUG)
@@ -72,51 +72,91 @@ fieldnames = [
 
 # smallest
 def plot_buffers(csv_filename, out="output.png"):
-     
-    data = pd.read_csv(csv_filename, sep=delimiter,) 
-    # d = data[ data["status"] != "Optimal"] 
-
-    # Ca genere un graphe avec plein de caracteres bizarres
-    # matplotlib.rc('font', family='FontAwesome')
-    # fig = plt.figure()
+    """
     # prop = FontProperties()
     # prop.set_file('STIXGeneral.ttf')
-    df_topologies = data.groupby("topology")
-    print("len=", len(df_topologies))
-    fig, axes = plt.subplots(nrows=1, ncols=3)
+    # Ca genere un graphe avec plein de caracteres bizarres
+    # matplotlib.rc('font', family='FontAwesome')
+    """
+     
+    data = pd.read_csv(csv_filename, sep=delimiter,) 
+
+    # fig = plt.figure()
     # axes = fig.gca()
+
+    df_topologies = data.groupby("topology")
+    ymin = 0 # data["objective"].min()
+    ymax = data["objective"].max()
+    fig, axes = plt.subplots(nrows=1, ncols=len(df_topologies))
+
+
+    print("len=", len(df_topologies))
     # print(d)
     # if not d.empty() :
     #     raise Exception("not everything optimal")
 
     # objective c'est la taille du buffer
-    # data["objective"].hist(grid=True)
     print(data)
-    # data.boxplot(ax=axes,
-    #     column="objective", 
-    #     by="name",
-    #     # title="Throughput comparison between the linux and ns3 implementations", 
-    #     # xlabel=""
-    #     # rot=45 
-    # )
     # data = data.groupby("name", "objective")
-    data.set_index("name", inplace=True)
-    # subplots=True
+    # data.set_index("topology", inplace=True)
+    # df_topologies.set_index("name", inplace=True)
     # use a cycle marker ?
+    """
+    df_topologies.plot.bar(
+            y="objective",
+            # x="name",
+            ax=axes,
+            # ax=axes[idx-1],
+            # legend=False,
+            # sharey=True,
+subplots=True,
 
-# 
-    # TODO we should also plot the RTOmax/fastretransmit buffer sizes
-    for idx, (topology, df) in enumerate(df_topologies):
-        df["objective"].plot.bar(
-                ax=axes[0,idx-1],
+                # by="name"
+                # x= data["name"],
+                # y= data["objective"]
+                # rot=0
+                )
+    """
+# # 
+#     # TODO we should also plot the RTOmax/fastretransmit buffer sizes
+    # for idx, (topology, df) in enumerate(df_topologies):
+    colors = ['r', 'g', 'b']
+    cycler = cycle(colors)
+    for axe, (topology, df) in zip(axes, df_topologies):
+        print("axes=", axe)
+        # print("idx=", idx)
+        df.plot.bar(
+                y="objective",
+                x="name",
+                ax=axe,
                 legend=False,
-                # subplots=True,
+                ylim=(ymin,ymax),
+                sharey=True,
+    # subplots=True
+    # title="toto",
+                color=colors,
+
                 # by="name"
                 # x= data["name"],
                 # y= data["objective"]
                 rot=0
                 )
-    fig.suptitle("", fontsize=12)
+        axe.set_xlabel(topology)
+    # subax =  data.plot.bar(
+    #         # ax=axes,
+    #         x="topology",
+    #         y="objective",
+    #         # ax=axes,
+    #         legend=False,
+    #         layout=(1,3), # looks cool !
+    #         subplots=True
+    #         # by="name"
+    #         # x= data["name"],
+    #         # y= data["objective"]
+    #         # rot=0
+    #         )
+    # print(subax)
+    # fig = subax[0,0].get_figure()
 
     # axes.set_ylabel("Required buffer sizes (MSS)")
     # axes.set_xlabel("")
@@ -176,7 +216,7 @@ def find_buffer_per_scheduler(
 
     # http://fontawesome.io/icon/long-arrow-down/
     # f175
-    result.update({"topology": topology, "name": m.config["name"] + " inc."})
+    result.update({"topology": topology, "name": "Inc."})
     # don't forget to set a proper font !
     # result.update({"name": m.config["name"] + u"\f175"})
     writer.writerow(result)
@@ -189,7 +229,7 @@ def find_buffer_per_scheduler(
     cmd = common_cmd + ""
     result = m.do_optbuffer(cmd)
     # result.update({"name": m.config["name"] + " decreasing"})
-    result.update({"topology": topology, "name": m.config["name"] + " dec."})
+    result.update({"topology": topology, "name": "Dec."})
     writer.writerow(result)
 
     # Sorted by subflow name 
@@ -198,7 +238,7 @@ def find_buffer_per_scheduler(
     m.config["sender"]["scheduler"] = "GreedyScheduler"
     cmd= common_cmd + ""
     result = m.do_optbuffer(cmd)
-    result.update({"topology": topology, "name": m.config["name"] + " default"})
+    result.update({"topology": topology, "name": "Default"})
     writer.writerow(result)
 
 
@@ -250,7 +290,6 @@ if __name__ == '__main__':
 
 
     if args.generate:
-
         find_necessary_buffer_for_topologies(same_rtt_different_fowd_topologies, output0, find_buffer_per_scheduler)
     # find_necessary_buffer_for_topologies(different_sf_nb_topologies, output1, find_necessary_buffer_for_topology)
     if args.plot:

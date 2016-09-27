@@ -20,9 +20,9 @@ import pulp as pu
 import pprint
 import shlex
 from .topology import MpTcpSubflow
-from .analysis import MpTcpReceiver, MpTcpSender, Simulator
+from .analysis import MpTcpReceiver, MpTcpSender, Simulator  # OptionSize, DssAck
 import importlib
-from . import problem
+from . import *
 from . import SymbolNames
 # from voluptuous import Required, All, Length, Range
 from jsonschema import validate
@@ -74,7 +74,7 @@ class MpTcpNumerics(cmd.Cmd):
     """
     Main class , an interpreter
     """
-    def __init__(self, topology=None, stdin=sys.stdin):
+    def __init__(self, topology, stdin=sys.stdin):
         """
         stdin
         """
@@ -83,8 +83,8 @@ class MpTcpNumerics(cmd.Cmd):
         # stdin ?
         super().__init__(completekey='tab', stdin=stdin)
 
-        if topology:
-            self.do_load_from_file(topology)
+        # if topology:
+        self.do_load_from_file(topology)
 
 
     @property
@@ -113,22 +113,43 @@ class MpTcpNumerics(cmd.Cmd):
         self.j = value
         return self.j
 
-    def do_load_from_file(self, filename):
+    def do_load_from_file(self, fd):
         """
         Load from file
         """
-        with open(filename) as f:
-            # object_hook
-            self.config = json.load(f)
+        if isinstance(fd, str):
+            fd = open(f)
+        self.config = json.load(fd)
+        # except TypeError:
+        # finally:
+
             # print(self.j["subflows"])
             # total = sum(map(lambda x: x["cwnd"], self.j["subflows"]))
             # self.subflows = map( lambda x: MpTcpSubflow(), self.j["subflows"])
             # for name, settings in self.j["subflows"].items():
             #     sf = MpTcpSubflow(name, **settings)
             #     self.j["subflows"].update({name: sf})
-        print("config", self.config)
+        # print("config", self.config)
             #     # print("toto")
         return self.config
+
+
+    def do_buffer(self, line):
+        """
+        Compute buffer size on current topology according to RFC6182
+        """
+        # parser = argparse.ArgumentParser(description="hello world")
+        # parser.add_argument('--rto', action=
+
+        subflows = self.subflows.values()
+        max_rto = max(subflows, lambda x: x.rto)
+        max_rtt = max(subflows, lambda x: x.rtt)
+        buf_rto = sum( map(lambda x: x.throughput * max_rto * subflows))
+        buf_fastretransmit = sum( map(lambda x: 2 * x.throughput * max_rtt * subflows))
+        print("Official size recommanded for RTOs:\n")
+        print(buf_rto)
+        print(buf_fastretransmit)
+
 
 
     def do_print(self, args):
@@ -529,7 +550,27 @@ class MpTcpNumerics(cmd.Cmd):
         return True
 
 
-    def do_plot_overhead(self, args):
+    # @is_loaded
+    def do_overhead(self, line):
+
+        parser = argparse.ArgumentParser(description="parser")
+        parser.add_argument('-o', '--out', action="store", 
+                type=argparse.FileType("w+"), help="File to write to")
+        subparsers = parser.add_subparsers(dest="type")
+        tex = subparsers.add_parser('tex', help="Generate tex output")
+        tex.add_argument('-s', '--substitute', help="Use the loaded topology")
+
+        ### Plotting subparser
+        plot = subparsers.add_parser('plot', help="Generate plot")
+        
+        # add --generic or for this topology ?
+
+        # parser.add_argument(outputhelp="")
+        # parser.add_argument(help="")
+        args = parser.parse_args(line)
+
+
+    # def do_plot_overhead(self, args):
         """
         total_bytes is the x axis,
         y is overhead
@@ -605,18 +646,24 @@ class MpTcpNumerics(cmd.Cmd):
         # numeric_oh = total_oh.subs(d)
 
         print("latex version=", sp.latex(variable_oh))
+        if args.out:
+            fd = args.out
+            fd.write(sp.latex(variable_oh))
         def _test_matt(s, ratios):
             # print("%r %r" % (s.limits, s.limits[0][0] ) )
             # print(self.j["subflows"][1])
             # print(s.variables[0])
             # print(s.limits[0][0].subs(i, 4) )
             # for z in range(s.limits[0][1], s.limits[0][2] ):
-            for z in range(1,real_nb_subflows+1):
+
+            subflows = list(self.subflows.values())
+            print("toto %r" % subflows)
+            for z in range(1, real_nb_subflows+1):
                 # print(z)
 
                 print("After substitution s=", s)
                 s = s.subs( {
-                    sf_mss[z]: self.j["subflows"][z-1]["mss"],
+                    sf_mss[z]: subflows[z-1].mss,
                     # sf_bytes[z]: total_bytes, # self.j["subflows"][i],
                     sf_bytes[z]: ratios[z-1] * total_bytes, # self.j["subflows"][i],
                     sf_dss_coverage[z]: 1500
@@ -634,7 +681,7 @@ class MpTcpNumerics(cmd.Cmd):
 
         # numeric_oh.subs(
         print("After substitution=", sp.latex(var_oh_numeric))
-        print("After substitution=", sp.latex(var_oh_numeric))
+        # print("After substitution=", sp.latex(var_oh_numeric))
         # print("After substitution=", sp.latex(numeric_oh))
         # print("After substitution=", sp.latex(numeric_oh.doit()))
 
@@ -649,6 +696,7 @@ def run():
 
     #  todo make it optional
     parser.add_argument("input_file", action="store",
+        type=argparse.FileType('r'),
         help="Either a pcap or a csv file (in good format)."
         "When a pcap is passed, mptcpanalyzer will look for a its cached csv."
         "If it can't find one (or with the flag --regen), it will generate a "

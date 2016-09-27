@@ -92,8 +92,13 @@ def plot_cwnds(csv_filename, out="output.png"):
             drop_cols.append(col)
 
     df.drop(drop_cols, axis=1, inplace=True)
-
+    df.dropna(axis=1,how="all", inplace=True)
     df.set_index("name", inplace=True)
+    def _rename(label):
+        if label.startswith('contrib_'):
+            label = "Contribution of subflow %s" % label[-1]
+        return label
+    df.rename(columns=_rename,inplace=True)
     print("after", df.columns)
 
     print(df)
@@ -110,20 +115,36 @@ def plot_cwnds(csv_filename, out="output.png"):
     # data.drop()
     # TODO plot  
     # secondary_y = If a list/tuple, which columns to plot on secondary y-axis
-    df.plot.bar(
+    axes.set_ylabel("Subflow contributions (%)")
+    axes2 = df.plot.bar(
         ax=axes,
         # column="objective", 
         # TODO now I can plot it in MB
-        secondary_y=["objective"],
-        legend=False,
+        secondary_y=["throughput"],
+        legend=True,
         rot=0, 
     )
 
+    # print(res)
     # fig.suptitle("With constraints", fontsize=12)
 
-    axes.set_ylabel("Throughput in blue (MSS/ms) and subflow contributions (%)")
+    # I have no idea why this works :/
+    # http://stackoverflow.com/questions/32999619/how-to-label-y-axis-when-using-a-secondary-y-axis
+    plt.ylabel("Throughput in blue (MSS/ms)")
     axes.set_xlabel("")
 
+    # handles2, labels2 = axes2.get_legend_handles_labels()
+    # handles, labels = axes2.get_legend_handles_labels()
+    # new_labels = []
+    # for label in labels:
+    #     if label.startswith('contrib_'):
+    #         label = "Contribution of subflow %s" % label[-1]
+    #     print(label)
+    #     new_labels.append(label)
+        
+        # get_patches(), get_text
+    # print(axes.legend().get_patches())
+    # axes.legend(handles, new_labels, prop={'size': 10})
 
     # filename =  os.path.join(os.getcwd(), os.path.basename(filename))
     # logger.info
@@ -256,12 +277,14 @@ def optimize_cwnds_for_topology(
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Run tests")
     parser.add_argument("-p", "--plot", action="store_true", help="Generate a plot" )
+    parser.add_argument("-g", "--generate", action="store_true", help="Generate results")
     parser.add_argument("-d", "--display", action="store_true", default=False,
             help="Open generated picture" )
     
     args, extra = parser.parse_known_args()
 
-    optimize_cwnds(cmds)
+    if args.generate:
+        optimize_cwnds(cmds)
     if args.plot:
         plot_cwnds(output1, png_output)
     if args.display:

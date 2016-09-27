@@ -16,6 +16,7 @@ import pulp as pu
 import pprint
 from . import SubflowState
 from .scheduler import Scheduler
+from typing import Dict
 # from . import problem
 
 log = logging.getLogger("mptcpnumerics")
@@ -109,48 +110,6 @@ class MpTcpCapabilities(Enum):
     DAckReplication = "DAckReplication"
     OpportunisticRetransmission = "Opportunistic retransmissions"
 
-
-# TODO make it cleaner with Syn/Ack mentions etc..
-class OptionSize(IntEnum):
-    """
-    Size in byte of MPTCP options
-    """
-    # 12 + 12 + 24
-    Capable = 48
-    # should be 12 + 16 + 24
-    Join = 52
-    FastClose = 12
-    Fail = 12
-    #
-    AddAddr4 = 10
-    AddAddr6 = 22
-
-    # 3 + n * 1 ?
-    # RmAddr
-
-
-class DssAck(IntEnum):
-    NoAck = 0
-    SimpleAck = 4
-    ExtendedAck = 8
-
-
-class DssMapping(IntEnum):
-    NoDss = 4
-    Simple = 8
-    Extended = 12
-
-
-
-def dss_size(ack: DssAck, mapping : DssMapping, with_checksum: bool=False) -> int:
-    """
-    Computes the size of a dss depending on the flags
-    """
-    size = 4
-    size += ack.value
-    size += mapping.value
-    size += 2 if with_checksum else 0
-    return size
 
 # class MpTcpOverhead(Command):
 #     """
@@ -562,7 +521,7 @@ class MpTcpReceiver:
         # a list of tuples (headSeq, endSeq)
         self.out_of_order = []
         """List of out of order blocks"""
-        self._subflows = subflows
+        self._subflows = subflows # type: Dict[str, MpTcpSubflow]
         """ Dictionary of subflows """
 
     @property
