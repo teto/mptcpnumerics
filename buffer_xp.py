@@ -41,10 +41,10 @@ different_sf_nb_topologies = [
 
 same_rtt_different_fowd_topologies = [
         # "examples/mono.json",
-        ("xp/duo.json", "default"),
-        ("xp/triplet.json", "default"),
+        ("xp/2subflows.json", "default"),
+        ("xp/3subflows.json", "default"),
         # ("xp/quatuor.json", "default"),
-        ("xp/6.json", "default"),
+        ("xp/6subflows.json", "default"),
         ]
 
 asymetric = [
@@ -141,7 +141,8 @@ subplots=True,
                 # y= data["objective"]
                 rot=0
                 )
-        axe.set_xlabel(topology)
+        xlabel = os.path.splitext(os.path.basename(topology))[0]
+        axe.set_xlabel(xlabel)
     # subax =  data.plot.bar(
     #         # ax=axes,
     #         x="topology",
@@ -158,7 +159,7 @@ subplots=True,
     # print(subax)
     # fig = subax[0,0].get_figure()
 
-    # axes.set_ylabel("Required buffer sizes (MSS)")
+    axes[0].set_ylabel("Required buffer sizes (MSS)")
     # axes.set_xlabel("")
 
 

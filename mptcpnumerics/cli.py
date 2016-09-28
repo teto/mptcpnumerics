@@ -22,6 +22,7 @@ import shlex
 from .topology import MpTcpSubflow
 from .analysis import MpTcpReceiver, MpTcpSender, Simulator  # OptionSize, DssAck
 import importlib
+from . import problem
 from . import *
 from . import SymbolNames
 # from voluptuous import Required, All, Length, Range
@@ -118,7 +119,7 @@ class MpTcpNumerics(cmd.Cmd):
         Load from file
         """
         if isinstance(fd, str):
-            fd = open(f)
+            fd = open(fd)
         self.config = json.load(fd)
         # except TypeError:
         # finally:
