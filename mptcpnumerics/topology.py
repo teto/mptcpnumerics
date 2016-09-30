@@ -73,6 +73,14 @@ class MpTcpSubflow:
     def rx(self):
         return self._rx_bytes
 
+    @property
+    def throughput(self):
+        """
+        Returns throughput (from file)
+        """
+        return self.cwnd_from_file * self.mss / self.rtt
+
+
     @rx.setter
     def rx(self, value):
         # log.
@@ -119,6 +127,7 @@ class MpTcpSubflow:
         return self.state != SubflowState.Available
 
 
+    @property
     def rto(self):
         """
         Retransmit Timeout
@@ -193,13 +202,6 @@ class MpTcpTopology:
         log.info("Loading topology from %s" % filename )
         with open(filename) as filename:
             self.config = json.load(filename)
-
-    @property
-    def throughput(self):
-        """
-        Returns throughput (from file)
-        """
-        return self.cwnd_from_file * self.mss / self.rtt
 
     @property
     def rcv_buf(self):

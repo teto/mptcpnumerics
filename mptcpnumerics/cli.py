@@ -85,6 +85,7 @@ class MpTcpNumerics(cmd.Cmd):
         super().__init__(completekey='tab', stdin=stdin)
 
         # if topology:
+        # self.prompt = topology + ">"
         self.do_load_from_file(topology)
 
 
@@ -135,22 +136,49 @@ class MpTcpNumerics(cmd.Cmd):
         return self.config
 
 
+    def get_rto_buf(self,):
+        """
+        Returns:
+            tuple max_rto/buffer_rto
+        """
+        subflows = list(self.subflows.values())
+        rtos = map( lambda x: x.rto, subflows)
+        max_rto = max(rtos)
+        buf_rto = sum( map(lambda x: x.throughput * max_rto, subflows))
+        return max_rto, buf_rto
+
+    def get_fastrestransmit_buf(self):
+        subflows = list(self.subflows.values())
+        rtts = map(lambda x: x.rtt, subflows)
+        max_rtt = max(rtts)
+        buf_fastretransmit = sum( map(lambda x: 2 * x.throughput * max_rtt, subflows))
+        return max_rtt, buf_fastretransmit
+
+
     def do_buffer(self, line):
         """
         Compute buffer size on current topology according to RFC6182
         """
-        # parser = argparse.ArgumentParser(description="hello world")
-        # parser.add_argument('--rto', action=
+        parser = argparse.ArgumentParser(description="hello world")
+        parser.add_argument('--rto', action="store_true", help="toto")
 
-        subflows = self.subflows.values()
-        max_rto = max(subflows, lambda x: x.rto)
-        max_rtt = max(subflows, lambda x: x.rtt)
-        buf_rto = sum( map(lambda x: x.throughput * max_rto * subflows))
-        buf_fastretransmit = sum( map(lambda x: 2 * x.throughput * max_rtt * subflows))
+        # subflows = self.subflows.values()
+        # print(subflows)
+        # rtos = sorted(subflows, key=lambda x: x.rto)
+        # log.debug(max_rto, rtos)
+        # log.debug(max_rtt, rtts)
+        # print(max_rto)
+
         print("Official size recommanded for RTOs:\n")
-        print(buf_rto)
-        print(buf_fastretransmit)
+        print(self.get_rto_buf())
+        print(self.get_fastrestransmit_buf())
 
+
+    def do_EOF(self, line):
+        """
+        Keep it to be able to exit with CTRL+D
+        """
+        return True
 
 
     def do_print(self, args):

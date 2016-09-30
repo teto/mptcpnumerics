@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from collections import namedtuple
 import json
 from mptcpnumerics.cli import MpTcpNumerics
 import argparse
@@ -8,7 +9,7 @@ import copy
 import csv
 import os
 import matplotlib.pyplot as plt
-import matplotlib
+import matplotlib as mpl
 from matplotlib.font_manager import FontProperties
 from itertools import cycle
 
@@ -39,23 +40,51 @@ different_sf_nb_topologies = [
         ("6.json", "default"),
         ]
 
-same_rtt_different_fowd_topologies = [
+
+# backup
+# same_rtt_different_fowd_topologies = [
+#         # "examples/mono.json",
+#         ("xp/2subflows.json", "default", scheduler),
+#         ("xp/3subflows.json", "default"),
+#         # ("xp/quatuor.json", "default"),
+#         ("xp/6subflows.json", "default"),
+# ]
+
+# RTO subflow
+# scenarios are tuples (topology, cmd, name, scheduler)
+# named as displayed in plot
+#  'type' is a list of scheduler and/or FR/RTO. 
+# Scenario = namedtuple(['topology', 'cmd', 'name', 'type'])
+class Scenario:
+    def __init__(self, topology, cmd: str, name: str, types=None): 
+        self.types = types if types else ['GreedySchedulerIncreasingFOWD', 'GreedySchedulerDecreasingFOWD', 'GreedyScheduler', 'FR', 'RTO']
+        self.cmd = cmd
+        self.name = name
+        self.topology = topology
+
+    def enforce_rto(self, subflow_name:str):
+        self.cmd += "--withstand_rto " + subflow_name
+
+same_rtt_different_fowd_scenarios = [
         # "examples/mono.json",
-        ("xp/2subflows.json", "default"),
-        ("xp/3subflows.json", "default"),
+        Scenario("xp/2subflows.json", "", "Inc.", ),
+        Scenario("xp/3subflows.json", "", "Inc.", ['GreedySchedulerIncreasingFOWD', 'GreedySchedulerDecreasingFOWD', 'GreedyScheduler', 'FR', 'RTO']),
+        Scenario("xp/6subflows.json", "", "Inc.", ['GreedySchedulerIncreasingFOWD', 'GreedySchedulerDecreasingFOWD', 'GreedyScheduler', 'FR', 'RTO']),
         # ("xp/quatuor.json", "default"),
-        ("xp/6subflows.json", "default"),
-        ]
+]
+
+# just prepend an RTO to command
+# def convert_to_rto_scenario():
+same_rtt_different_fowd_scenarios_rto = map(lambda x: x.enforce_rto("a") , same_rtt_different_fowd_scenarios)
 
 asymetric = [
     ("asymetric.json", "slow"),
     ("asymetric.json", "slow"),
-    
-    ]
+]
 
 # topology0 = "examples/double.json"
 output0 = "buffers_scheduler.csv"
-output1 = "buffers_rto.csv"
+output_rto = "buffers_rto.csv"
 png_output = "results_buffer.png"
 # j = json.loads("examples/double.json")
 
@@ -120,11 +149,17 @@ subplots=True,
 # # 
 #     # TODO we should also plot the RTOmax/fastretransmit buffer sizes
     # for idx, (topology, df) in enumerate(df_topologies):
-    colors = ['r', 'g', 'b']
+    # colors = ['r', 'g', 'b', ]
+    colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
+    cycler = mpl.rcParams['axes.prop_cycle']
+    print(cycler)
+    print(colors)
+    # styles = cycle(cycler)
     cycler = cycle(colors)
     for axe, (topology, df) in zip(axes, df_topologies):
         print("axes=", axe)
         # print("idx=", idx)
+        # style = next(styles)
         df.plot.bar(
                 y="objective",
                 x="name",
@@ -135,13 +170,16 @@ subplots=True,
     # subplots=True
     # title="toto",
                 color=colors,
+                # **style,
 
                 # by="name"
                 # x= data["name"],
                 # y= data["objective"]
-                rot=0
+                rot=45,
                 )
         xlabel = os.path.splitext(os.path.basename(topology))[0]
+        # insert a space after the number of subflows
+        xlabel = xlabel[0] + " " + xlabel[2:]
         axe.set_xlabel(xlabel)
     # subax =  data.plot.bar(
     #         # ax=axes,
@@ -186,14 +224,15 @@ def find_necessary_buffer_for_topologies(
                 )
         writer.writeheader()
 
-        for topology, rto_subflow in topologies:
-            func(topology, rto_subflow, writer)
+        for scenario in topologies:
+            func(scenario.topology, scenario, writer)
 
 
 
 def find_buffer_per_scheduler(
     topology, 
-    fainting_subflow,
+    # fainting_subflow,
+    scenario,
     writer
     ):
     """
@@ -205,6 +244,9 @@ def find_buffer_per_scheduler(
     """
     m = MpTcpNumerics(topology)
     common_cmd = " --duration 80 "
+    # todo withstand rto
+
+    common_cmd = scenario.cmd
 
     # assert( "default" in m.subflows )
 
@@ -239,8 +281,26 @@ def find_buffer_per_scheduler(
     m.config["sender"]["scheduler"] = "GreedyScheduler"
     cmd= common_cmd + ""
     result = m.do_optbuffer(cmd)
-    result.update({"topology": topology, "name": "Default"})
+    result.update({"topology": topology, "name": "Manual"})
     writer.writerow(result)
+
+    # recommended buffer (by the standard)
+    ######################################
+    m = MpTcpNumerics(topology)
+    result = {}
+    max_rtt, buf_fastretransmit  = m.get_fastrestransmit_buf()
+    result.update({"topology": topology, "name": "FR", "objective": buf_fastretransmit})
+    writer.writerow(result)
+
+    # recommended buffer (by the standard)
+    ######################################
+    m = MpTcpNumerics(topology)
+    result = {}
+    max_rto, buf_rto = m.get_rto_buf()
+    result.update({"topology": topology, "name": "RTO", "objective": buf_rto})
+    writer.writerow(result)
+
+
 
 
 def find_necessary_buffer_for_topology(
@@ -291,8 +351,11 @@ if __name__ == '__main__':
 
 
     if args.generate:
-        find_necessary_buffer_for_topologies(same_rtt_different_fowd_topologies, output0, find_buffer_per_scheduler)
-    # find_necessary_buffer_for_topologies(different_sf_nb_topologies, output1, find_necessary_buffer_for_topology)
+        # find_necessary_buffer_for_topologies(same_rtt_different_fowd_topologies, output0, find_buffer_per_scheduler)
+        find_necessary_buffer_for_topologies(same_rtt_different_fowd_scenarios, output0, find_buffer_per_scheduler)
+        # find_necessary_buffer_for_topologies(same_rtt_different_fowd_scenarios_rto, output_rto, find_buffer_per_scheduler)
+
+# find_necessary_buffer_for_topologies(different_sf_nb_topologies, output1, find_necessary_buffer_for_topology)
     if args.plot:
         # change with output1 when needed
         plot_buffers(output0, png_output)

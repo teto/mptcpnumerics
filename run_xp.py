@@ -72,7 +72,7 @@ mn /home/teto/scheduler/examples/double.json optcwnd --sfmin fast 0.4
 step = 5 # milliseconds
 
 output1 = "cwnds.csv"
-png_output = "results_cwnd.png"
+png_output = "results_cwnds.png"
 
 
 def plot_cwnds(csv_filename, out="output.png"):
