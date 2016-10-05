@@ -1,5 +1,5 @@
 {
-	"name": "6",
+	"name": "6 subflows",
 	"sender": {
 		"snd_buffer": 40,
 		"capabilities": ["NR-SACK"]

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import matplotlib.pyplot as plt
+from cycler import cycler
 import pandas as pd
 import json
 from mptcpnumerics.cli import MpTcpNumerics, validate_config
@@ -84,7 +85,12 @@ def plot_cwnds(csv_filename, out="output.png"):
      
     df = pd.read_csv(csv_filename, sep=delimiter,) 
     # d = data[ data["status"] != "Optimal"] 
-
+    colors = ['b', 'r', 'g', 'c', 'y']
+    linestyles = ['-', '-', '--', ':', '-.']
+    prop_cycler=(cycler('color', colors) + cycler('linestyle', linestyles))
+    styles1 = ['bs-','ro-','y^-']
+    styles2 = ['rs-','go-','b^-']
+    # plt.rc('axes', prop_cycle=(cycler('color', colors) + cycler('linestyle', linestyles)))
     cols = list(df.columns)
     drop_cols= []
     for col in cols:
@@ -99,13 +105,21 @@ def plot_cwnds(csv_filename, out="output.png"):
             label = "Contribution of subflow %s" % label[-1]
         return label
     df.rename(columns=_rename,inplace=True)
+    df.rename(columns={'throughput': "Global throughput"},inplace=True)
     print("after", df.columns)
 
     print(df)
     # can make figure bigger
     fig = plt.figure()
-
     axes = fig.gca()
+
+    # 
+    ########################################
+# df["name"].unique()
+    nb_subplots = len(df) 
+    print("#sim=%d" % nb_subplots)
+    fig, axes = plt.subplots(nrows=1, ncols=len(nb_subplots))
+    # axes.set_prop_cycle(prop_cycler)
     # print(d)
     # if not d.empty() :
     #     raise Exception("not everything optimal")
@@ -116,15 +130,42 @@ def plot_cwnds(csv_filename, out="output.png"):
     # TODO plot  
     # secondary_y = If a list/tuple, which columns to plot on secondary y-axis
     axes.set_ylabel("Subflow contributions (%)")
+
+    patches = ['x', 'o', '/', '\\' , 'O', '.']
+    # In [43]: finite_cy_iter = iter(cyl)
+    # In [44]: dd_finite = defaultdict(lambda : next(finite_cy_iter))
+    # changer le style des barres c pas évident
+
+
+    for axe, (topology, df) in zip(axes, df_topologies):
+
+"""
     axes2 = df.plot.bar(
         ax=axes,
         # column="objective", 
         # TODO now I can plot it in MB
         secondary_y=["throughput"],
         legend=True,
+        mark_right=False, # removes the "right" from legend
         rot=0, 
+        # 
+        # style : list or dict
+        # matplotlib line style per column
+        # style=styles1,
+        hatch=patches,
+        # prop_cycle=prop_cycler,
     )
+"""
+    # axes2.set_hatch()
 
+    # print("axes=", len( axes))
+    # print("axes2=", axes2)
+    # Possible patches: [‘/’ | ‘\’ | ‘|’ | ‘-‘ | ‘+’ | ‘x’ | ‘o’ | ‘O’ | ‘.’ | ‘*’]
+
+    print("patches=", axes.patches)
+    print("patches=", dir(axes.patches[0]))
+    for style, p in zip(patches, axes.patches):
+        p.set_hatch(style)
     # print(res)
     # fig.suptitle("With constraints", fontsize=12)
 

@@ -58,6 +58,7 @@ output0 = "buffers_scheduler.csv"
 output1 = "buffers_rto.csv"
 png_output = "results_buffer.png"
 # j = json.loads("examples/double.json")
+patches = ['x', 'o', '/', '\\' , 'O', '.']
 
 delimiter = ","
 
@@ -124,7 +125,6 @@ subplots=True,
     cycler = cycle(colors)
     for axe, (topology, df) in zip(axes, df_topologies):
         print("axes=", axe)
-        # print("idx=", idx)
         df.plot.bar(
                 y="objective",
                 x="name",
@@ -132,32 +132,13 @@ subplots=True,
                 legend=False,
                 ylim=(ymin,ymax),
                 sharey=True,
-    # subplots=True
-    # title="toto",
                 color=colors,
-
-                # by="name"
-                # x= data["name"],
-                # y= data["objective"]
                 rot=0
-                )
+        )
         xlabel = os.path.splitext(os.path.basename(topology))[0]
+        for st, p in zip(patches, axe.patches):
+            p.set_hatch(st)
         axe.set_xlabel(xlabel)
-    # subax =  data.plot.bar(
-    #         # ax=axes,
-    #         x="topology",
-    #         y="objective",
-    #         # ax=axes,
-    #         legend=False,
-    #         layout=(1,3), # looks cool !
-    #         subplots=True
-    #         # by="name"
-    #         # x= data["name"],
-    #         # y= data["objective"]
-    #         # rot=0
-    #         )
-    # print(subax)
-    # fig = subax[0,0].get_figure()
 
     axes[0].set_ylabel("Required buffer sizes (MSS)")
     # axes.set_xlabel("")
