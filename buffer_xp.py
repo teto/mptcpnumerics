@@ -67,9 +67,9 @@ class Scenario:
 
 same_rtt_different_fowd_scenarios = [
         # "examples/mono.json",
-        Scenario("xp/2subflows.json", "", "Inc.", ),
-        Scenario("xp/3subflows.json", "", "Inc.", ['GreedySchedulerIncreasingFOWD', 'GreedySchedulerDecreasingFOWD', 'GreedyScheduler', 'FR', 'RTO']),
-        Scenario("xp/6subflows.json", "", "Inc.", ['GreedySchedulerIncreasingFOWD', 'GreedySchedulerDecreasingFOWD', 'GreedyScheduler', 'FR', 'RTO']),
+        Scenario("xp/2subflows.json", "", "2 subflows", ),
+        Scenario("xp/3subflows.json", "", "3 subflows", ),
+        Scenario("xp/6subflows.json", "", "6 subflows", ),
         # ("xp/quatuor.json", "default"),
 ]
 
@@ -162,7 +162,7 @@ subplots=True,
         # style = next(styles)
         df.plot.bar(
                 y="objective",
-                x="name",
+                x="name", # TODO should be [command + type or scheduler ?] 
                 ax=axe,
                 legend=False,
                 ylim=(ymin,ymax),
