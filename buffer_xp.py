@@ -23,6 +23,8 @@ TODO compare with official advised buffer size
 
 asciicinema rec, and to close, exit the shell
 
+if xlabels not visible, 
+http://stackoverflow.com/questions/6774086/why-is-my-xlabel-cut-off-in-my-matplotlib-plot
 as for asserts:
 __debug__
 This constant is true if Python was not started with an -O option. See also the assert statement.
@@ -170,13 +172,14 @@ subplots=True,
                 # by="name"
                 # x= data["name"],
                 # y= data["objective"]
-                rot=45
+                rot=0
                 )
         xlabel = os.path.splitext(os.path.basename(topology))[0]
         for st, p in zip(patches, axe.patches):
             p.set_hatch(st)
         # insert a space after the number of subflows
-        xlabel = xlabel[0] + " " + xlabel[2:]
+
+        xlabel = xlabel[0] + " " + xlabel[1:]
         axe.set_xlabel(xlabel)
 
     axes[0].set_ylabel("Required buffer sizes (MSS)")

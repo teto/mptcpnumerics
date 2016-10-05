@@ -181,7 +181,6 @@ def plot_cwnds(csv_filename, out="output.png"):
     # axes.legend(lines, [line.get_label() for line in lines], )
     axes.legend(handles + handles2, labels2+labels, fontsize=10)
         
-        # get_patches(), get_text
     # print(axes.legend().get_patches())
     # axes.legend(handles, new_labels, prop={'size': 10})
     # axes.legend()
