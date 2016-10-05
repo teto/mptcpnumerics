@@ -85,6 +85,8 @@ def plot_cwnds(csv_filename, out="output.png"):
      
     df = pd.read_csv(csv_filename, sep=delimiter,) 
     # d = data[ data["status"] != "Optimal"] 
+    throughput_colname = "Global throughput"
+
     colors = ['b', 'r', 'g', 'c', 'y']
     linestyles = ['-', '-', '--', ':', '-.']
     prop_cycler=(cycler('color', colors) + cycler('linestyle', linestyles))
@@ -98,16 +100,21 @@ def plot_cwnds(csv_filename, out="output.png"):
             drop_cols.append(col)
 
     df.drop(drop_cols, axis=1, inplace=True)
-    df.dropna(axis=1,how="all", inplace=True)
+    df.dropna(axis=1, how="all", inplace=True)
     df.set_index("name", inplace=True)
     def _rename(label):
         if label.startswith('contrib_'):
             label = "Contribution of subflow %s" % label[-1]
         return label
-    df.rename(columns=_rename,inplace=True)
-    df.rename(columns={'throughput': "Global throughput"},inplace=True)
+    df.rename(columns=_rename, inplace=True)
+    df.rename(columns={'throughput': throughput_colname}, inplace=True)
     print("after", df.columns)
 
+    # reorder lists
+    cols = df.columns.tolist()
+    cols = cols[1:] + cols[:1]
+    print(cols)
+    df = df[cols]
     print(df)
     # can make figure bigger
     fig = plt.figure()
@@ -116,9 +123,9 @@ def plot_cwnds(csv_filename, out="output.png"):
     # 
     ########################################
 # df["name"].unique()
-    nb_subplots = len(df) 
-    print("#sim=%d" % nb_subplots)
-    fig, axes = plt.subplots(nrows=1, ncols=len(nb_subplots))
+    # nb_subplots = len(df) 
+    # print("#sim=%d" % nb_subplots)
+    # fig, axes = plt.subplots(nrows=1, ncols=len(nb_subplots))
     # axes.set_prop_cycle(prop_cycler)
     # print(d)
     # if not d.empty() :
@@ -129,65 +136,55 @@ def plot_cwnds(csv_filename, out="output.png"):
     # data.drop()
     # TODO plot  
     # secondary_y = If a list/tuple, which columns to plot on secondary y-axis
-    axes.set_ylabel("Subflow contributions (%)")
 
-    patches = ['x', 'o', '/', '\\' , 'O', '.']
-    # In [43]: finite_cy_iter = iter(cyl)
-    # In [44]: dd_finite = defaultdict(lambda : next(finite_cy_iter))
-    # changer le style des barres c pas évident
+    hatches = ['x', 'o', '/', '\\' , 'O', '.']
 
-
-    for axe, (topology, df) in zip(axes, df_topologies):
-
-"""
-    axes2 = df.plot.bar(
+    # for axe, (topology, df) in zip(axes, df_topologies):
+    # du coup retourne axes
+    df.plot.bar(
         ax=axes,
         # column="objective", 
         # TODO now I can plot it in MB
-        secondary_y=["throughput"],
-        legend=True,
-        mark_right=False, # removes the "right" from legend
+        secondary_y=[throughput_colname],
+        legend=False,
+        # mark_right=False, # removes the "right" from legend
         rot=0, 
         # 
         # style : list or dict
         # matplotlib line style per column
         # style=styles1,
-        hatch=patches,
+        # hatch=patches,
         # prop_cycle=prop_cycler,
     )
-"""
     # axes2.set_hatch()
 
-    # print("axes=", len( axes))
+    print("axes=", axes)
     # print("axes2=", axes2)
     # Possible patches: [‘/’ | ‘\’ | ‘|’ | ‘-‘ | ‘+’ | ‘x’ | ‘o’ | ‘O’ | ‘.’ | ‘*’]
-
-    print("patches=", axes.patches)
-    print("patches=", dir(axes.patches[0]))
-    for style, p in zip(patches, axes.patches):
+    hatches = ''.join(h*len(df) for h in hatches)
+    for style, p in zip(hatches, axes.patches):
         p.set_hatch(style)
-    # print(res)
     # fig.suptitle("With constraints", fontsize=12)
 
     # I have no idea why this works :/
     # http://stackoverflow.com/questions/32999619/how-to-label-y-axis-when-using-a-secondary-y-axis
-    plt.ylabel("Throughput in blue (MSS/ms)")
+
+    # IMPORTANT on a right_ax et left_ax
+    axes.set_ylabel("Subflow contributions (%)")
+    axes.right_ax.set_ylabel("Global throughput (MSS/ms)")
     axes.set_xlabel("")
 
-    # handles2, labels2 = axes2.get_legend_handles_labels()
-    # handles, labels = axes2.get_legend_handles_labels()
-    # new_labels = []
-    # for label in labels:
-    #     if label.startswith('contrib_'):
-    #         label = "Contribution of subflow %s" % label[-1]
-    #     print(label)
-    #     new_labels.append(label)
+    handles2, labels2 = axes.right_ax.get_legend_handles_labels()
+    handles, labels = axes.get_legend_handles_labels()
+    # lines = axes.get_lines() + axes.right_ax.get_lines()
+    # print(lines)
+    # axes.legend(lines, [line.get_label() for line in lines], )
+    axes.legend(handles + handles2, labels2+labels, fontsize=10)
         
         # get_patches(), get_text
     # print(axes.legend().get_patches())
     # axes.legend(handles, new_labels, prop={'size': 10})
-
-    # filename =  os.path.join(os.getcwd(), os.path.basename(filename))
+    # axes.legend()
     # logger.info
     print("Saving into %s" % (out))
     # dpi=800
