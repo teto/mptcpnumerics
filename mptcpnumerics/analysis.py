@@ -280,7 +280,6 @@ class MpTcpSender:
         self._snd_next = 0    # left edge of the window/dsn (rename to snd_una ?) 
         self._snd_una = 0
         self.rcv_wnd = rcvbufmax # there is no 3WHS so no way to get the bufmax
-        self.scheduler = scheduler
         # self.bytes_sent = 0
         # """total bytes sent at the mptcp level, i.e., different bytes"""
         self.constraints = []
@@ -363,7 +362,7 @@ class MpTcpSender:
         log.debug("Mimicking an RTO => Needs to drop this pkt")
         e = EventStopRTO(sf_id) 
         e.dsn = dsn
-        e.delay = self.subflows[sf_id].rto()
+        e.delay = self.subflows[sf_id].rto
         self.subflows[sf_id].state = SubflowState.RTO
         return e
 

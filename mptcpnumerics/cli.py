@@ -263,14 +263,16 @@ class MpTcpNumerics(cmd.Cmd):
 
 
         fainting_subflow = self.subflows[args.withstand_rto[0]] if len(args.withstand_rto) else None
+        log.critical("FAINTING SF= %s" % (fainting_subflow))
         if args.duration is None:
-            
-            min_duration = fainting_subflow.rto() + fainting_subflow.rtt + 1 if fainting_subflow else 0
+            min_duration = fainting_subflow.rto + fainting_subflow.rtt + 1 if fainting_subflow else 0
             duration = self.compute_cycle_duration(min_duration)
+            log.info("User forced a duration")
         else:
             log.info("User forced a duration")
             duration = args.duration
 
+        log.info("Computed duration %d" % duration)
 
         sim = self.run_cycle(duration, fainting_subflow)
 
@@ -507,7 +509,7 @@ class MpTcpNumerics(cmd.Cmd):
             Simulator
         """
 
-        log.info("run_cycle")
+        log.info("run_cycle with fainting subflow=%s and duration=%d" % (fainting_subflow, duration))
 
         # disabled because unused
         capabilities = [] # self.j["capabilities"]
@@ -519,10 +521,12 @@ class MpTcpNumerics(cmd.Cmd):
 
         receiver = MpTcpReceiver(sym_rcvbufmax, capabilities, self.j, self.subflows)
 
+
+        # Instantiate a scheduler
         scheduler_name = self.j["sender"].get("scheduler", "GreedySchedulerIncreasingFOWD")
         class_ = getattr(importlib.import_module("mptcpnumerics.scheduler"), scheduler_name)
         scheduler = class_()
-        print("Set scheduler to %s" % scheduler)
+        log.info("Set scheduler to %s" % scheduler)
         # dict not needed anymore ?
         log.warn("Setting sender max buffer size equal to to the receiver's")
         sender = MpTcpSender(
@@ -533,7 +537,7 @@ class MpTcpNumerics(cmd.Cmd):
                 sym_rcvbufmax, 
                 subflows=dict(self.subflows),
                 scheduler=scheduler
-                )
+        )
 
         # TODO fix duration
         sim = Simulator(self.j, sender, receiver)

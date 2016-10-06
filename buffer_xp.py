@@ -67,11 +67,20 @@ class Scenario:
     def enforce_rto(self, subflow_name:str):
         self.cmd += "--withstand_rto " + subflow_name
 
+
+### TODO share the scenarios with the 
+#############################
 same_rtt_different_fowd_scenarios = [
         # "examples/mono.json",
         Scenario("xp/2subflows.json", "", "2 subflows", ),
         Scenario("xp/3subflows.json", "", "3 subflows", ),
         Scenario("xp/6subflows.json", "", "6 subflows", ),
+
+
+        # seems to be a problem there: results should be higher/equal to RTO ones
+        # Scenario("xp/2subflows.json", " --withstand-rto a", "2 sf - RTO", ),
+        # Scenario("xp/3subflows.json", " --withstand-rto a", "3 sf - RTO", ),
+        # Scenario("xp/6subflows.json", "", "6 subflows", ),
         # ("xp/quatuor.json", "default"),
 ]
 
@@ -95,7 +104,7 @@ delimiter = ","
 
 # CSV header
 fieldnames = [
-"rcv_next","duration","rcv_wnd","name", "topology", 
+"xticklabel", "rcv_next","duration","rcv_wnd","name", "topology", 
 # "mss_default","rx_default",
 "status","objective","throughput",
 # "cwnd_default"
@@ -116,13 +125,13 @@ def plot_buffers(csv_filename, out="output.png"):
     # fig = plt.figure()
     # axes = fig.gca()
 
-    df_topologies = data.groupby("topology")
+    # df_topologies = data.groupby("topology")
     ymin = 0 # data["objective"].min()
     ymax = data["objective"].max()
-    fig, axes = plt.subplots(nrows=1, ncols=len(df_topologies))
+    fig, axes = plt.subplots(nrows=1, ncols=len(data["name"].unique()))
 
 
-    print("len=", len(df_topologies))
+    # print("len=", len(df_topologies))
     # print(d)
     # if not d.empty() :
     #     raise Exception("not everything optimal")
@@ -159,11 +168,11 @@ subplots=True,
     print(colors)
     # styles = cycle(cycler)
     cycler = cycle(colors)
-    for axe, (topology, df) in zip(axes, df_topologies):
+    for axe, (name, df) in zip(axes, data.groupby("name")):
         print("axes=", axe)
         df.plot.bar(
                 y="objective",
-                x="name", # TODO should be [command + type or scheduler ?] 
+                x="xticklabel", # TODO should be [command + type or scheduler ?] 
                 ax=axe,
                 legend=False,
                 ylim=(ymin,ymax),
@@ -172,15 +181,15 @@ subplots=True,
                 # by="name"
                 # x= data["name"],
                 # y= data["objective"]
-                rot=0
-                )
-        xlabel = os.path.splitext(os.path.basename(topology))[0]
+                rot=45
+        )
         for st, p in zip(patches, axe.patches):
             p.set_hatch(st)
         # insert a space after the number of subflows
 
-        xlabel = xlabel[0] + " " + xlabel[1:]
-        axe.set_xlabel(xlabel)
+        # xlabel = os.path.splitext(os.path.basename(topology))[0]
+        # xlabel = xlabel[0] + " " + xlabel[1:]
+        axe.set_xlabel(name)
 
     axes[0].set_ylabel("Required buffer sizes (MSS)")
     # axes.set_xlabel("")
@@ -213,7 +222,6 @@ def find_necessary_buffer_for_topologies(
             func(scenario.topology, scenario, writer)
 
 
-
 def find_buffer_per_scheduler(
     topology, 
     # fainting_subflow,
@@ -227,54 +235,56 @@ def find_buffer_per_scheduler(
     The topology MUST contain a subflow called "default" that will be qualified as 
     entering RTO
     """
-    m = MpTcpNumerics(topology)
-    common_cmd = " --duration 80 "
+
+    def run_cmd(scheduler, xticklabel):
+
+        # WARN 
+        command = " --duration 80 "
+        m = MpTcpNumerics(topology)
+
+        # command = scenario.cmd
+        m.config["sender"]["scheduler"] = scheduler
+        result = m.do_optbuffer(command)
+
+        # http://fontawesome.io/icon/long-arrow-down/
+        # f175
+        result.update({"name": scenario.name, "topology": topology, "xticklabel": xticklabel})
+        # don't forget to set a proper font !
+        # result.update({"name": m.config["name"] + u"\f175"})
+        writer.writerow(result)
+
     # todo withstand rto
 
-    common_cmd = scenario.cmd
-
+    # common_cmd = scenario.cmd
     # assert( "default" in m.subflows )
 
     # def  arrow up f176
     # Sorting fowd from small to big
     ######################################
-    cmd = common_cmd + ""
-    result = m.do_optbuffer(cmd)
-    m.config["sender"]["scheduler"] = "GreedySchedulerIncreasingFOWD"
+    run_cmd("GreedySchedulerIncreasingFOWD", "Inc.")
 
     # http://fontawesome.io/icon/long-arrow-down/
     # f175
-    result.update({"topology": topology, "name": "Inc."})
-    # don't forget to set a proper font !
-    # result.update({"name": m.config["name"] + u"\f175"})
-    writer.writerow(result)
-
     # Sorting fowd from big to small
     ######################################
-
-    m = MpTcpNumerics(topology)
-    m.config["sender"]["scheduler"] = "GreedySchedulerDecreasingFOWD"
-    cmd = common_cmd + ""
-    result = m.do_optbuffer(cmd)
-    # result.update({"name": m.config["name"] + " decreasing"})
-    result.update({"topology": topology, "name": "Dec."})
-    writer.writerow(result)
+    run_cmd("GreedySchedulerDecreasingFOWD", "Dec.")
 
     # Sorted by subflow name 
     ######################################
-    m = MpTcpNumerics(topology)
-    m.config["sender"]["scheduler"] = "GreedyScheduler"
-    cmd= common_cmd + ""
-    result = m.do_optbuffer(cmd)
-    result.update({"topology": topology, "name": "Manual"})
-    writer.writerow(result)
+    # m = MpTcpNumerics(topology)
+    # m.config["sender"]["scheduler"] = "GreedyScheduler"
+    # cmd= common_cmd + ""
+    # result = m.do_optbuffer(cmd)
+    # result.update({"topology": topology, "name": "Manual"})
+    # writer.writerow(result)
+    run_cmd("GreedyScheduler", "Manual")
 
     # recommended buffer (by the standard)
     ######################################
     m = MpTcpNumerics(topology)
     result = {}
     max_rtt, buf_fastretransmit  = m.get_fastrestransmit_buf()
-    result.update({"topology": topology, "name": "FR", "objective": buf_fastretransmit})
+    result.update({"topology": topology, "name": scenario.name, "xticklabel": "FR", "objective": buf_fastretransmit})
     writer.writerow(result)
 
     # recommended buffer (by the standard)
@@ -282,7 +292,7 @@ def find_buffer_per_scheduler(
     m = MpTcpNumerics(topology)
     result = {}
     max_rto, buf_rto = m.get_rto_buf()
-    result.update({"topology": topology, "name": "RTO", "objective": buf_rto})
+    result.update({"topology": topology, "name": scenario.name, "xticklabel": "RTO", "objective": buf_rto})
     writer.writerow(result)
 
 

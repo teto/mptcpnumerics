@@ -30,7 +30,6 @@ cmds = [
         # ("duo.json", )
         ]
 
-
 delimiter = ","
 fieldnames = [
 "rcv_next","duration","rcv_wnd","name",
