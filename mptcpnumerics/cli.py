@@ -296,6 +296,7 @@ class MpTcpNumerics(cmd.Cmd):
             pb += constraint
 
         pb.solve() # returns status
+        pb.writeLP("buffer.lp")
         result = pb.generate_result(sim, export_per_subflow_variables=True)
         result.update({"duration": duration})
 
