@@ -1,4 +1,4 @@
-#!/usr/bin/python3.5
+#!/usr/bin/python
 # attempt to do some monkey patching
 from mptcpanalyzer.command import Command
 
@@ -18,12 +18,11 @@ class OptionSize(IntEnum):
     Join = 52
     FastClose = 12
     Fail = 12
-    # 
     AddAddr4 = 10
     AddAddr6 = 22
-    
+
     # 3 + n * 1 ?
-    # RmAddr 
+    # RmAddr
 
 class DssAck(IntEnum):
     NoAck = 0
@@ -49,7 +48,7 @@ class MpTcpOverhead(Command):
         size = 4
         size += ack.value
         size += mapping.value
-        size += 2 if checksum else 0
+        size += 2 if with_checksum else 0
         return size
 
     def _overhead_const (total_nb_of_subflows : int):
