@@ -26,7 +26,7 @@ from . import problem
 from . import *
 from . import SymbolNames
 # from voluptuous import Required, All, Length, Range
-from jsonschema import validate
+# from jsonschema import validate
 
 log = logging.getLogger("mptcpnumerics")
 # log.setLevel(logging.DEBUG)
@@ -134,6 +134,24 @@ class MpTcpNumerics(cmd.Cmd):
         # print("config", self.config)
             #     # print("toto")
         return self.config
+
+    def get_proba(self,):
+        """
+        Returns:
+            tuple max_rto/buffer_rto
+        """
+        # TODO reestablish to compare with a different number of used subflows
+        # sets = self.subflows
+        # for subset in itertools.combinations(sets, i)):
+        sum ()
+
+
+        # subflows = list(self.subflows.values())
+        # rtos = map( lambda x: x.rto, subflows)
+        # max_rto = max(rtos)
+        # buf_rto = sum( map(lambda x: x.throughput * max_rto, subflows))
+        # return max_rto, buf_rto
+
 
 
     def get_rto_buf(self,):
