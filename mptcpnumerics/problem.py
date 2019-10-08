@@ -33,7 +33,7 @@ class MpTcpProblem(pu.LpProblem):
         super().__init__(*args, **kwargs)
         # todo move rcv_buffer to
         # self.rcv_buffer = rcv_buffer
-        self.lp_variables_dict = {}  #"subflows": {} }
+        self.lp_variables_dict = {}  # "subflows": {} }
         """Dictionary of lp variables that maps symbolic names to lp variables"""
 
         self.add_mapping(SymbolNames.ReceiverWindow.value, rcv_buf)
@@ -46,22 +46,23 @@ class MpTcpProblem(pu.LpProblem):
         """
         try:
             return inspect.getmodule(obj).__package__.startswith("sympy")
-            
 
         except Exception as e:
             log.debug("Not a sympy variable: %s" % e)
             return False
 
-    def setObjective(self,obj):
+    def setObjective(self, obj):
         # print("inspect,",inspect.getmodule(obj))
         # print("inspect,",inspect.getmodule(obj) in sp)
         if self.is_sympy(obj):
+            log.debug("Converting objective")
             obj = self.sp_to_pulp(obj)
 
         print("obj=", type(obj))
+        # the objective function of type LpConstraintVar
         super().setObjective(obj)
 
-    def add_mapping(self, name : str, value, warn_if_exists: bool = True):
+    def add_mapping(self, name: str, value, warn_if_exists: bool = True):
         """
         Add mapping sympy -> pulp or integer
         """
@@ -86,15 +87,16 @@ class MpTcpProblem(pu.LpProblem):
             lp_cwnd = pu.LpVariable(sf.sp_cwnd.name, lowBound=0, cat=pu.LpInteger)
             lp_rx = pu.LpVariable(generate_rx_name(sf.name), lowBound=0, cat=pu.LpInteger)
             self.add_mapping(lp_cwnd.name, lp_cwnd)
-            self.add_mapping(sf.sp_mss.name, sf.mss) # hardcoded mss
-            self.add_mapping( generate_rx_name(sf.name), lp_rx)
+            # hardcoded mss
+            self.add_mapping(sf.sp_mss.name, sf.mss)
+            self.add_mapping(generate_rx_name(sf.name), lp_rx)
             # self.lp_variables_dict.update({
             #     lp_cwnd.name: lp_cwnd,
             #     sf.sp_mss.name: sf.mss,
             # })
 
         # might be overriden later
-        log.debug("Generated %s" % self.lp_variables_dict)
+        log.debug("Generated %s", self.lp_variables_dict)
         # upBound=sf.cwnd_from_file,
 
 
@@ -115,8 +117,8 @@ class MpTcpProblem(pu.LpProblem):
 
         if isinstance(other, Constraint):
             constraint = other
-            print("Adding constraint: " , constraint)
-            print(" constraint.wnd: " , constraint.wnd, type(constraint.wnd))
+            print("Adding constraint: ", constraint)
+            print(" constraint.wnd: ", constraint.wnd, type(constraint.wnd))
             # HACK ideally my fork should automatically convert toa pulp constraint but that does not work
             constraint = self.sp_to_pulp(constraint.size) <= self.sp_to_pulp(constraint.wnd)
 
@@ -128,11 +130,11 @@ class MpTcpProblem(pu.LpProblem):
             rconstraint = self.sp_to_pulp(other.rhs)
 
             log.debug("Lconstraint= %r" % lconstraint)
-            log.debug("Rconstraint=%r", rconstraint) # 'of type', type(rconstraint) )
+            log.debug("Rconstraint=%r", rconstraint)  # 'of type', type(rconstraint) )
             # do the same with rhs
             # print("constraint1=", lconstraint)
             # constructs an LpAffineExpression
-            constraint = eval("lconstraint "+other.rel_op+ " rconstraint")
+            constraint = eval("lconstraint "+other.rel_op + " rconstraint")
         else:
             constraint = other
 
@@ -190,7 +192,7 @@ class MpTcpProblem(pu.LpProblem):
         return f(*values)
 
 
-    def generate_result(self, sim, export_per_subflow_variables: bool=True):
+    def generate_result(self, sim, export_per_subflow_variables: bool = True):
         """
         Should be called only once the problem got solved
         Returns a dict that can be enriched
@@ -209,12 +211,13 @@ class MpTcpProblem(pu.LpProblem):
         # print("RCV_NEXT=", sim.receiver.rcv_next) print("RCV_NEXT=",
         # self.sp_to_pulp(sim.receiver.rcv_next))
         transmitted_bytes = pu.value(self.sp_to_pulp(sim.receiver.rcv_next))
-        result = { "status": pu.LpStatus[self.status],
-                # "rcv_buffer":
-                "throughput": transmitted_bytes / duration,
-                # a list ofs PerSubflowResult "subflows": {},
-                "rcv_next": transmitted_bytes,
-                "objective": pu.value(self.objective) 
+        result = {
+            "status": pu.LpStatus[self.status],
+            # "rcv_buffer":
+            "throughput": transmitted_bytes / duration,
+            # a list ofs PerSubflowResult "subflows": {},
+            "rcv_next": transmitted_bytes,
+            "objective": pu.value(self.objective)
         }
 
         # for key, var in self.variablesDict():
@@ -229,15 +232,15 @@ class MpTcpProblem(pu.LpProblem):
                 print("key/var", key, var)
 
                 # TODO should dep
-                print("RX=" , self.sp_to_pulp(sf.rx))
-                result.update({ generate_rx_name(name): pu.value(self.sp_to_pulp(sf.rx))})
+                print("RX=", self.sp_to_pulp(sf.rx))
+                result.update({generate_rx_name(name): pu.value(self.sp_to_pulp(sf.rx))})
                 # result.update({ "tx": self.sp_to_pulp(sf.sp_tx)})
 
                 contrib = pu.value(self.sp_to_pulp(sf.rx)) / transmitted_bytes
-                result.update({ "contrib_" + sf.name: contrib})
+                result.update({"contrib_" + sf.name: contrib})
                 # TODO generate a contribution for each subflow ?
 
-        result.update({"duration": duration })
+        result.update({"duration": duration})
         # result.update({"duration": sim.time_limit })
         # result.update(self.variablesDict())
         # result.update(self.variablesDict())
@@ -281,7 +284,7 @@ class ProblemOptimizeBuffer(MpTcpProblem):
     """
 
     def __init__(self, name):
-        lp_rcv_wnd = pu.LpVariable(SymbolNames.ReceiverWindow.value, lowBound=0, cat=pu.LpInteger )
+        lp_rcv_wnd = pu.LpVariable(SymbolNames.ReceiverWindow.value, lowBound=0, cat=pu.LpInteger)
         lp_rcv_wnd = pu.LpAffineExpression(lp_rcv_wnd)
 
         # self.add_mapping(SymbolNames.ReceiverWindow.value, lp_rcv_wnd)
@@ -300,4 +303,3 @@ class ProblemOptimizeBuffer(MpTcpProblem):
 
     #     lp_rcv_wnd = pu.LpVariable(SymbolNames.ReceiverWindow.value, lowBound=0, cat=pu.LpInteger)
     #     self.lp_variables_dict[SymbolNames.ReceiverWindow.value] = lp_rcv_wnd
-

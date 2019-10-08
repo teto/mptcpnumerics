@@ -18,6 +18,7 @@ import logging
 import pulp as pu
 import pulp.solvers
 import pprint
+import os
 import shlex
 from mptcpnumerics.topology import MpTcpSubflow
 from mptcpnumerics.analysis import MpTcpReceiver, MpTcpSender, Simulator  # OptionSize, DssAck
@@ -79,12 +80,27 @@ class MpTcpNumerics(Cmd):
         """
         self.prompt = "Rdy>"
         self.j = {}
+        history_filename = os.path.join(
+            os.getenv("XDG_DATA_HOME", os.path.expanduser("~/.local/share/")),
+            "mptcpnumerics.lst"
+        )
+
         # stdin ?
-        super().__init__(completekey='tab', stdin=stdin, **kwargs)
+        super().__init__(
+            completekey='tab', stdin=stdin,
+            persistent_history_file=history_filename,
+            **kwargs,
+        )
 
         # if topology:
         # self.prompt = topology + ">"
+        self.debug = True
         self.do_load_from_file(topology)
+
+        # the distributed cbc binary is not necessarily compatible
+        # HARDCODED, make it configurable ?
+        self.my_solver = pulp.solvers.PULP_CBC_CMD(path="cbc")
+
 
     @property
     def rcv_buffer(self):
@@ -176,7 +192,7 @@ class MpTcpNumerics(Cmd):
         # log.debug(max_rtt, rtts)
         # print(max_rto)
 
-        print("Official size recommanded for RTOs:\n")
+        self.poutput("Official size recommanded for RTOs:\n")
         print(self.get_rto_buf())
         print(self.get_fastrestransmit_buf())
 
@@ -294,9 +310,8 @@ class MpTcpNumerics(Cmd):
             pb += constraint
 
         # here we can pass a solver !
-        solver = pulp.solvers.PULP_CBC_CMD(path="cbc")
-        # , *args, **kwargs)
-        pb.solve()  #  returns status
+        print("HALLO")
+        pb.solve(solver=self.my_solver)  #  returns status
         pb.writeLP("buffer.lp")
         result = pb.generate_result(sim, export_per_subflow_variables=True)
         result.update({"duration": duration})
@@ -463,7 +478,7 @@ class MpTcpNumerics(Cmd):
         print("output=", pb.name)
         pb.writeLP(args.output)
 
-        pb.solve()
+        pb.solve(solver=self.my_solver)
 
         # returned dictionary
         result = pb.generate_result(sim, export_per_subflow_variables=True)
@@ -591,7 +606,7 @@ class MpTcpNumerics(Cmd):
         tex = subparsers.add_parser('tex', help="Generate tex output")
         tex.add_argument('-s', '--substitute', help="Use the loaded topology")
 
-        ### Plotting subparser
+        # Plotting subparser
         plot = subparsers.add_parser('plot', help="Generate plot")
         # add --generic or for this topology ?
 
@@ -741,7 +756,8 @@ def run():
         help="Accepts a filename as argument from which commands will be loaded."
         "Commands follow the same syntax as in the interpreter"
     )
-    # parser.add_argument("--command", "-c", action="store", type=str, nargs="*", help="Accepts a filename as argument from which commands will be loaded")
+    # parser.add_argument("--command", "-c", action="store", type=str, nargs="*",
+    # help="Accepts a filename as argument from which commands will be loaded")
 
     args, unknown_args = parser.parse_known_args(sys.argv[1:])
 
