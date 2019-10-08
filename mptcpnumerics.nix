@@ -1,5 +1,7 @@
 { stdenv, python, fetchFromGitHub, buildPythonApplication
-, stevedore, cmd2, pandas, sortedcontainers, matplotlib, pulp, pyqt5, sympy }:
+, stevedore, cmd2, pandas, sortedcontainers, matplotlib, pulp, pyqt5, sympy
+, cbc
+}:
 buildPythonApplication rec {
 	pname = "mptcpnumerics";
 	version = "0.1";
@@ -29,6 +31,10 @@ buildPythonApplication rec {
       (matplotlib.override {enableGtk3=true;})
       pulp
       pyqt5
+
+      # we need a solver: cbc/gurobi/cplex
+      cbc
+
     ];
 	/* propagatedBuildInputs =  [ stevedore pandas matplotlib pyqt5 ]; */
 

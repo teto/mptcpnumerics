@@ -3,14 +3,20 @@ import sympy as sp
 import logging
 import csv
 from collections import namedtuple
-from . import SymbolNames, generate_rx_name
-from .analysis import Constraint
+from mptcpnumerics import SymbolNames, generate_rx_name
+from mptcpnumerics.analysis import Constraint
 
 import inspect
+from dataclasses import dataclass
 
 log = logging.getLogger(__name__)
 
-PerSubflowResult = namedtuple('PerSubflowResult', ["cwnd", "throughput", "ratio"])
+
+@dataclass
+class PerSubflowResult:
+    cwnd: int
+    throughput: int
+    ratio: int
 
 class MpTcpProblem(pu.LpProblem):
     """
@@ -27,7 +33,7 @@ class MpTcpProblem(pu.LpProblem):
         super().__init__(*args, **kwargs)
         # todo move rcv_buffer to
         # self.rcv_buffer = rcv_buffer
-        self.lp_variables_dict = { } #"subflows": {} }
+        self.lp_variables_dict = {}  #"subflows": {} }
         """Dictionary of lp variables that maps symbolic names to lp variables"""
 
         self.add_mapping(SymbolNames.ReceiverWindow.value, rcv_buf)

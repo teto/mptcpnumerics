@@ -1,11 +1,10 @@
-#!/bin/env python3
 from enum import Enum, IntEnum
 
 class SymbolNames(Enum):
     ReceiverWindow = "rcv_wnd"
     SndBufMax = "sndbufmax"
 
-# to have a common convention between 
+# to have a common convention between
 def generate_mss_name(name):
     return "mss_%s" % name
 
@@ -21,8 +20,8 @@ def rto(rtt, svar):
 
 
 class SubflowState(Enum):
-    Available = 0 
-    RTO =  1
+    Available = 0
+    RTO = 1
     WaitingAck = 2
 
 
@@ -56,9 +55,7 @@ class DssMapping(IntEnum):
     Simple = 8
     Extended = 12
 
-
-
-def dss_size(ack: DssAck, mapping : DssMapping, with_checksum: bool=False) -> int:
+def dss_size(ack: DssAck, mapping: DssMapping, with_checksum: bool = False) -> int:
     """
     Computes the size of a dss depending on the flags
     """
