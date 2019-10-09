@@ -14,8 +14,8 @@ from collections import namedtuple
 import sortedcontainers
 import pulp as pu
 import pprint
-from . import SubflowState
-from .scheduler import Scheduler
+from mptcpnumerics import SubflowState
+from mptcpnumerics.scheduler import Scheduler
 from typing import Dict
 # from . import problem
 
@@ -23,9 +23,9 @@ log = logging.getLogger("mptcpnumerics")
 
 
 constraint_types = [
-        "buffer",
-        "cwnd",
-        ]
+    "buffer",
+    "cwnd",
+]
 
 
 def dump_translation_dict(d):
@@ -33,7 +33,7 @@ def dump_translation_dict(d):
     help debugging
     """
     for key, val in d.items():
-        print(key, " (", type(key), ") =", val, " (", type(val), ")" )
+        print(key, " (", type(key), ") =", val, " (", type(val), ")")
 
 def post_simulation(f):
     """
@@ -160,12 +160,10 @@ class MpTcpCapabilities(Enum):
 # # TODO sy.add varying overhead
 #                 # sy.add
 #             print("toto")
-
 #     def help(self):
 #         """
 #         """
 #         print("Allow to generate stats")
-
 #     def complete(self, text, line, begidx, endidx):
 #         """
 #         """
@@ -221,7 +219,7 @@ class SenderEvent(Event):
 
     def __str__(self):
         res = super().__str__()
-        res += " dsn={s.dsn} size={s.size}".format( s=self)
+        res += " dsn={s.dsn} size={s.size}".format(s=self)
         return res
 
 class EventStopRTO(SenderEvent):
@@ -235,7 +233,7 @@ class ReceiverEvent(Event):
         """
         :param blocks Out of order blocks as in SACK
         """
-        super().__init__(sf_id, ) #Direction.Sender)
+        super().__init__(sf_id, )  # Direction.Sender)
 
         self.dack = None
         self.rcv_wnd = None
@@ -262,7 +260,7 @@ class MpTcpSender:
         _snd_next: Next #seq to send (SND.NXT)
         rcv_wnd: Current receiver window.
         scheduler (Scheduler):
-        snd_buf_max: Maximum size of the sending buffer. 
+        snd_buf_max: Maximum size of the sending buffer.
         constraints: Constraints (head of line blocking, flow control) are saved with sympy symbols.
     """
     # subflow congestion windows
@@ -520,7 +518,7 @@ class MpTcpReceiver:
         # a list of tuples (headSeq, endSeq)
         self.out_of_order = []
         """List of out of order blocks"""
-        self._subflows = subflows # type: Dict[str, MpTcpSubflow]
+        self._subflows = subflows  # type: Dict[str, MpTcpSubflow]
         """ Dictionary of subflows """
 
     @property
@@ -599,14 +597,14 @@ class MpTcpReceiver:
         log.debug("Old list %s", self.out_of_order)
         print("update_out_of_order")
         # sort by dsn
-        temp = sorted(self.out_of_order, key=lambda x : x[0])
+        temp = sorted(self.out_of_order, key=lambda x: x[0])
         new_list = []
         # todo use size instead
         for block in temp:
             print("rcv_next={nxt} Block={block}".format(
                 nxt=self.rcv_next,
                 block=block,
-                )
+            )
             )
             if self.rcv_next == block.dsn:
                 # += ?
@@ -619,7 +617,7 @@ class MpTcpReceiver:
 
         # swap old list with new one
         self.out_of_order = new_list
-        
+
         log.debug("New OOO list %s", self.out_of_order)
 
 
@@ -643,7 +641,7 @@ class MpTcpReceiver:
         # if tailSeq > self.right_edge():
         #     tailSeq = self.right_edge()
         #     log.error ("packet exceeds what should be received")
-        print("headSeq=%r vs %s"%( headSeq, (self.rcv_next)))
+        print("headSeq=%r vs %s" % (headSeq, (self.rcv_next)))
         # with sympy, I can do
         # if sp.solve(headSeq < self.rcv_next) is True:
         # # if headSeq < self.rcv_next:
@@ -657,7 +655,7 @@ class MpTcpReceiver:
             # assert headSeq < tailSeq
             # self.
             block = OutOfOrderBlock(headSeq, p.size)
-            self.out_of_order.append ( block )
+            self.out_of_order.append(block)
         elif headSeq == self.rcv_next:
             log.debug("Inorder packet %s" % p)
             self.rcv_next += p.size
@@ -746,7 +744,7 @@ by rcv_window
 
         # list of constraints that will represent the problem when simulation ends
         # TODO remove ?
-        self.constraints =[]
+        self.constraints = []
 
         self.finished = False
         """True when simulation has ended"""
@@ -775,8 +773,8 @@ by rcv_window
         # if p.direction == Receiver:
         #     self.bytes_sent += p.size
 
-            # todo sauvegarder le temps, dsn, size necessaire
-            # self.constraints.append()
+        # todo sauvegarder le temps, dsn, size necessaire
+        # self.constraints.append()
         self.events.add(p)
         print(len(self.events), " total events")
 
@@ -875,10 +873,5 @@ by rcv_window
     def stop(self, stop_time):
         """
         """
-        log.info("Setting stop_time to %d" % stop_time)
+        log.info("Setting stop_time to %d", stop_time)
         self.time_limit = stop_time
-
-
-
-
-

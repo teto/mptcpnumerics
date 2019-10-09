@@ -32,9 +32,6 @@ buildPythonApplication rec {
       pulp
       pyqt5
 
-      # we need a solver: cbc/gurobi/cplex
-      cbc
-
     ];
 	/* propagatedBuildInputs =  [ stevedore pandas matplotlib pyqt5 ]; */
 

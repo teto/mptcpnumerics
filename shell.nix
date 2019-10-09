@@ -10,7 +10,7 @@ let
   }) ).overridePythonAttrs (oa: {
 
 
-    version = "0.3.3-dev";
+    version = "0.1-dev";
     nativeBuildInputs = (oa.nativeBuildInputs or []) ++ [
       # to publish on pypi
       # pkgs.python3Packages.twine
@@ -19,7 +19,9 @@ let
       my_nvim.config.python3Env
 
       # temporary addition to work with mpls
-      openssl
+      # openssl
+      # we need a solver: cbc/gurobi/cplex
+      cbc
     ];
 
     src = ./.;
@@ -58,5 +60,3 @@ let
 in
 # TODO generate our own nvim
   prog
-
-

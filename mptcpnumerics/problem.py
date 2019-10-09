@@ -177,7 +177,7 @@ class MpTcpProblem(pu.LpProblem):
         """
 
         # if not isinstance(expr, sp.Symbol):
-        print("Type %s", type(expr))
+        print("Type %s" % type(expr))
         if not self.is_sympy(expr):
             log.warning("%s not a symbol but a %s" % (expr, type(expr)))
             return expr
@@ -264,7 +264,8 @@ class MpTcpProblem(pu.LpProblem):
 
 class ProblemOptimizeCwnd(MpTcpProblem):
     """
-    hello world
+    Ignore the json snd_cwnd_from_file values and try to compute them instead
+    according to certain objectives
     """
 
     def __init__(self, buffer_size, name):

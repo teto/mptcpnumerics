@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from cycler import cycler
 import pandas as pd
 import json
-from mptcpnumerics.cli import MpTcpNumerics, validate_config
+from mptcpnumerics.cli import MpTcpNumerics
 import argparse
 import logging
 import copy
@@ -21,33 +21,33 @@ IMPORTANT: all subflows must be named sfX (sf0, sf1 etc...)
 """
 # file,name, cmd
 cmds = [
-        ("cwnd2.json", "Sim. 1", ""),
-        ("cwnd2.json", "Sim. 2", " --sfmax a 0.4"), # Limit subflow0 contribution to 40%
-        ("cwnd2.json", "Sim. 3", " --sfmin b 0.5"), # Enforce a 60% contribution on subflow 1
-        ("xp/cwd4.json", "Sim. 4", "--sfmin a 0.1 --sfmin d 0.1 --sfmin c 0.1 --sfmin b 0.1 "),
-        ("xp/cwd4.json", "Sim. 5", "--sfmin a 0.2  --sfmin b 0.2 --sfmax d 0.1 --sfmin c 0.2"),
-        # ("examples/mono.json", ""),
-        # ("duo.json", )
-        ]
+    ("cwnd2.json", "Sim. 1", ""),
+    ("cwnd2.json", "Sim. 2", " --sfmax a 0.4"),  #  Limit subflow0 contribution to 40%
+    ("cwnd2.json", "Sim. 3", " --sfmin b 0.5"),  #  Enforce a 60% contribution on subflow 1
+    ("xp/cwd4.json", "Sim. 4", "--sfmin a 0.1 --sfmin d 0.1 --sfmin c 0.1 --sfmin b 0.1 "),
+    ("xp/cwd4.json", "Sim. 5", "--sfmin a 0.2  --sfmin b 0.2 --sfmax d 0.1 --sfmin c 0.2"),
+    # ("examples/mono.json", ""),
+    # ("duo.json", )
+]
 
 delimiter = ","
 fieldnames = [
-"rcv_next","duration","rcv_wnd","name",
-# "mss_default","rx_default",
-"status","objective","throughput",
-"cmd"
-# "cwnd_default"
+    "rcv_next", "duration", "rcv_wnd", "name",
+    # "mss_default","rx_default",
+    "status", "objective", "throughput",
+    "cmd"
+    # "cwnd_default"
 ]
 # 'cwnd_fast': 10.0, 'mss_fast': 1, 'rx_fast'
 subflow_names = [
-        "sf0", "sf1", "sf2", 
-        "sf3", "sf4", "sf5", 
-        "sf6"
-        ]
+    "sf0", "sf1", "sf2",
+    "sf3", "sf4", "sf5",
+    "sf6"
+]
 
 subflow_names = ["a", "b", "c", "d", "e", "f"]
 for name in subflow_names:
-    for prefix in ["cwnd", "mss", "rx" , "contrib"]:
+    for prefix in ["cwnd", "mss", "rx", "contrib"]:
         fieldnames.append(prefix + "_" + name)
 
 
@@ -69,7 +69,7 @@ __debug__
 This constant is true if Python was not started with an -O option. See also the assert statement.
 mn /home/teto/scheduler/examples/double.json optcwnd --sfmin fast 0.4
 """
-step = 5 # milliseconds
+step = 5  # milliseconds
 
 output1 = "cwnds.csv"
 png_output = "results_cwnds.png"
@@ -81,7 +81,6 @@ def plot_cwnds(csv_filename, out="output.png"):
     - total throughput (rather goodput)
     - per subflow contribution
     """
-     
     df = pd.read_csv(csv_filename, sep=delimiter,) 
     # d = data[ data["status"] != "Optimal"] 
     throughput_colname = "Global throughput"

@@ -71,7 +71,7 @@ class MpTcpOverhead(Command):
             j = json.load(f)
             print("Number of subflows=%d" % len(j["subflows"]))
             for s in j["subflows"]:
-                print("MSS=%d" % s["mss"])
+                print("MSS=%d" % s["mtu"])
 # TODO sy.add varying overhead
                 # sy.add 
             print("toto")

@@ -25,7 +25,6 @@ from distutils.core import setup
 from distutils.util import convert_path
 
 class TestCommand(Command):
-    user_options = []
 
     def initialize_options(self):
         pass
@@ -34,7 +33,8 @@ class TestCommand(Command):
         pass
 
     def run(self):
-        import sys, subprocess
+        import sys
+        import subprocess
 
         raise SystemExit(
             subprocess.call([sys.executable,
@@ -47,7 +47,10 @@ class TestCommand(Command):
 # if something fail during install, try running the script with sthg like
 # DISTUTILS_DEBUG=1 python3.5 setup.py install --user -vvv
 
-main_ns={}
+
+main_ns = {}  # type: ignore
+
+
 ver_path = convert_path('mptcpnumerics/version.py')
 with open(ver_path) as ver_file:
     exec(ver_file.read(), main_ns)
@@ -67,44 +70,19 @@ setup(name="mptcpnumerics",
           'Intended Audience :: Science/Research',
           'Intended Audience :: Telecommunications Industry',
           'Environment :: Console',
-          'Programming Language :: Python :: 3.5',
+          'Programming Language :: Python :: 3.7',
       ],
       keywords=["mptcp analysis"],
       packages=find_packages(),
-      # [
-          # # "mptcpanalyzer", "mptcpanalyzer/plots",
-      # ],
-      # data files allows to install files outside the package
-      # see package_data to add files within pkg
-      # package_data=['
-      # package_data={
-      #     '': ['*.md', "*.json"],
-      #     "mptcpanalyzer": ["toto/mptcp_fields.json"],
-      #     },
-      # data_files=[
-          # ("data", "mptcpanalyzer/mptcp_fields.json"),
-      # ],
       entry_points={
           "console_scripts": [
-            # creates 2 system programs that can be called from PATH
-            # 'mptcpanalyzer = mptcpanalyzer.cli:cli',
-            # 'mptcpexporter = mptcpanalyzer.exporter:main',
-            'mptcpnumerics = mptcpnumerics.cli:run'
+              'mptcpnumerics = mptcpnumerics.cli:run'
           ],
-        # Each item in the list should be a string with name = module:importable where name is the user-visible name for the plugin, module is the Python import reference for the module, and importable is the name of something that can be imported from inside the module.
-          # 'numerics.mods': [
-          #     'ns3 = mptcpanalyzer.plots.ns3:PlotTraceSources',
-          #     ],
-          # # namespace for plugins that monkey patch the main Cmd class
-          # 'mptcpanalyzer.cmds': [
-          #     'stats = mptcpanalyzer.stats:DoStats',
-          #   ]
       },
       # pandas should include matplotlib dependancy right ?
       install_requires=[
           'matplotlib',  # for plotting
           'cmd2',
-          # 'pandas>=0.17.1', # to load and process csv files
           # those dependancies might made optional later or the package split into two
           'sympy',  # for symbolic computing
           'sortedcontainers',  # for the mini mptcp simulator events list
