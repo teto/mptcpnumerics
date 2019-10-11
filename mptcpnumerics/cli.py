@@ -23,6 +23,7 @@ import shlex
 from mptcpnumerics.topology import MpTcpSubflow
 from mptcpnumerics.analysis import MpTcpReceiver, MpTcpSender, Simulator  # OptionSize, DssAck
 import importlib
+import datetime
 from mptcpnumerics import problem
 # from . import *
 from mptcpnumerics import SymbolNames
@@ -141,8 +142,8 @@ class MpTcpNumerics(Cmd):
     def get_fastrestransmit_buf(self):
         subflows = list(self.subflows.values())
         # les convertir en timedelta
-        rtts = map(lambda x: x.rtt, subflows)
-        max_rtt = max(rtts)
+        # rtts = map(lambda x: datetime.timedelta(microseconds=x.rtt), subflows)
+        max_rtt = max(map(lambda x: x.rtt.microseconds/1000), subflows)
         buf_fastretransmit = sum(map(lambda x: 2 * x.throughput * max_rtt, subflows))
         return max_rtt, buf_fastretransmit
 
@@ -202,9 +203,8 @@ class MpTcpNumerics(Cmd):
 
         log.info("Computing cycle duration")
         print(self.subflows)
-        rtts = list(map(lambda x: x.rtt_ms, self.subflows.values()))
-        log.debug("Rtts are ", rtts)
-        log.debug("Rtts are ", rtts)
+        rtts = list(map(lambda x: x.rtt.microseconds/1000, self.subflows.values()))
+        log.debug("Rtts are %r", rtts)
         # integer least common multiple.
         # maybe we should convert to sthg hier
         lcm = sp.ilcm(*rtts)

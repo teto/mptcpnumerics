@@ -4,14 +4,19 @@ generate mptcpsubflow on its own ?
 import logging
 import pprint
 import json
+import datetime
 import sympy as sp
 from enum import Enum
 from mptcpnumerics import generate_rx_name, generate_cwnd_name, generate_mss_name, rto, SubflowState
 from mptcpnumerics.analysis import SenderEvent
 from dataclasses import dataclass, field, InitVar
+import math
 
 log = logging.getLogger(__name__)
 
+def round_rtt(rtt, mul=5):
+    rtt_i = math.floor(rtt)
+    return (rtt_i - rtt_i % 5)
 
 # Call it raw ?
 @dataclass
@@ -36,42 +41,52 @@ class MpTcpSubflow:
     name: str
     app_limited: bool
     mtu: int
-    min_rtt: int
     rttvar: int
     delivery_rate: float
     fowd: int
     bowd: int
     retrans: int
     snd_cwnd: int
-    rtt_ms: int
-    rto_ms: int
     delivered: int
     lost: int
     tcp_state: str
     ca_state: str
+    snd_ssthresh: int
+    # rtt: int = field(init=False)
+    # rto: int = field(init=False)
+    """ use = field(default_factory=False)"""
+    min_rtt: int
     loss_rate: float = field(init=False)
 
     # kept for backwards compatibility
-    cwnd_from_file: float = field(init=False)
+    # cwnd_from_file: int = field(init=False)
 
-    snd_ssthresh: InitVar[int]
     pacing: InitVar[int]
+    rtt_us: InitVar[int]
+    rto_us: InitVar[int]
+
 
     # Non-nullable Pseudo fields
     # InitVar[list]
 
-    def __post_init__(self, ssthresh, pacing, **kwargs):
+    def __post_init__(self, pacing, rtt_us, rto_us, **kwargs):
         self.sp_cwnd = sp.Symbol(generate_cwnd_name(self.name), positive=True)
 
         # provide an upperbound to sympy so that it can deduce out of order packets etc...
         # TODO according to SO, it should work without that :/
         # sp.refine(self.sp_cwnd, sp.Q.positive(upper_bound - self.sp_cwnd))
+        print("postinit", rto_us)
 
+        # self.pacing = 0
         self.sp_mss = sp.Symbol(generate_mss_name(self.name), positive=True)
         self.cwnd_from_file = self.snd_cwnd
+        # datetime.timedelta(microseconds=rtt_us)
+        self.rtt = datetime.timedelta(microseconds=rtt_us)
+        # self.rto = datetime.timedelta(microseconds=rto_us)
         # self.mss = mss
         # self.sp_tx = 0
         self._rx_bytes = 0  # sp.Symbol(generate_rx_name(name), positive=True)
+        self.min_rtt = datetime.timedelta(microseconds=self.min_rtt)
 
         self._state = SubflowState.Available
         """
@@ -150,9 +165,9 @@ class MpTcpSubflow:
         return rto(self.rtt, self.rttvar)
 
     @property
-    def rtt(self):
+    def rawrtt(self):
         """
-        Returns constant Round Trip Time
+        Returns propagation delay instead
         """
         return self.fowd + self.bowd
 
