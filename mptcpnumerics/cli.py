@@ -24,7 +24,7 @@ from mptcpnumerics.topology import MpTcpSubflow
 from mptcpnumerics.analysis import MpTcpReceiver, MpTcpSender, Simulator  # OptionSize, DssAck
 import importlib
 import datetime
-from mptcpnumerics import problem
+from mptcpnumerics import problem, round_rtt
 # from . import *
 from mptcpnumerics import SymbolNames
 # from voluptuous import Required, All, Length, Range
@@ -199,11 +199,13 @@ class MpTcpNumerics(Cmd):
     def compute_cycle_duration(self, minimum=0):
         """
         returns (approximate lcm of all subflows), (perfect lcm ?)
+
+        We use the minimum RTT
         """
 
         log.info("Computing cycle duration")
-        print(self.subflows)
-        rtts = list(map(lambda x: x.rtt.microseconds/1000, self.subflows.values()))
+        # print(self.subflows)
+        rtts = list(map(lambda x: round_rtt(x.min_rtt.microseconds/1000), self.subflows.values()))
         log.debug("Rtts are %r", rtts)
         # integer least common multiple.
         # maybe we should convert to sthg hier
@@ -395,9 +397,9 @@ class MpTcpNumerics(Cmd):
             duration = args.duration
 
         log.info("Running cycles for a duration=%d", duration)
-        sys.exit(1)
 
         sim = self.run_cycle(duration, fainting_subflow)
+        sys.exit(1)
 
         # TODO s'il y a le spread, il faut relancer le processus d'optimisation avec la contrainte
         pb = problem.ProblemOptimizeCwnd(

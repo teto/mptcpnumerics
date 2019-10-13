@@ -14,10 +14,6 @@ import math
 
 log = logging.getLogger(__name__)
 
-def round_rtt(rtt, mul=5):
-    rtt_i = math.floor(rtt)
-    return (rtt_i - rtt_i % 5)
-
 # Call it raw ?
 @dataclass
 class MpTcpSubflow:
