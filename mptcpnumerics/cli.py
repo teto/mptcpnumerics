@@ -265,7 +265,7 @@ class MpTcpNumerics(Cmd):
             log.info("User forced a duration")
             duration = args.duration
 
-        log.info("Computed duration %d" % duration)
+        log.info("Computed duration %d", duration)
 
         sim = self.run_cycle(duration, fainting_subflow)
 
@@ -399,7 +399,6 @@ class MpTcpNumerics(Cmd):
         log.info("Running cycles for a duration=%d", duration)
 
         sim = self.run_cycle(duration, fainting_subflow)
-        sys.exit(1)
 
         # TODO s'il y a le spread, il faut relancer le processus d'optimisation avec la contrainte
         pb = problem.ProblemOptimizeCwnd(
@@ -484,9 +483,6 @@ class MpTcpNumerics(Cmd):
 
         return result
 
-
-
-    # TODO make it static
     # TODO pass an initial amount of data rather than a time limit ?
     # @staticmethod
     def run_cycle(
@@ -505,9 +501,7 @@ class MpTcpNumerics(Cmd):
         Returns:
             Simulator
         """
-
-        log.info("run_cycle with fainting subflow=%s and duration=%d" % (fainting_subflow, duration))
-
+        log.info("run_cycle with fainting subflow=%s and duration=%d", fainting_subflow, duration)
         # disabled because unused
         capabilities = []
 
@@ -523,7 +517,7 @@ class MpTcpNumerics(Cmd):
         scheduler_name = self.config["sender"].get("scheduler", "GreedySchedulerIncreasingFOWD")
         class_ = getattr(importlib.import_module("mptcpnumerics.scheduler"), scheduler_name)
         scheduler = class_()
-        log.info("Set scheduler to %s" % scheduler)
+        log.info("Set scheduler to %s", scheduler)
         # dict not needed anymore ?
         log.warn("Setting sender max buffer size equal to to the receiver's")
         sender = MpTcpSender(
@@ -538,6 +532,9 @@ class MpTcpNumerics(Cmd):
 
         # TODO fix duration
         sim = Simulator(self.config, sender, receiver)
+        log.info("Initialized simulation with: ")
+        log.info(sim.describe())
+        sys.exit(1)
 
         # we start sending a full window over each path
         # sort them depending on fowd

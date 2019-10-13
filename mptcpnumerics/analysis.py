@@ -17,7 +17,7 @@ import pprint
 from mptcpnumerics import SubflowState
 from mptcpnumerics.scheduler import Scheduler
 from typing import Dict
-# from . import problem
+from functools import wraps
 
 log = logging.getLogger("mptcpnumerics")
 
@@ -59,9 +59,7 @@ def analyze_results(ret):
     pp.pprint(ret)
 
 
-
 # to drop
-from functools import wraps
 
 def froze_it(cls):
     cls.__frozen = False
@@ -267,23 +265,23 @@ class MpTcpSender:
     # need to have dsn, cwnd, outstanding ?
 
     # TODO maintain statistics about the events and categorize them by HOLTypes
-    def __init__(self, rcvbufmax, sndbufmax, subflows, scheduler : Scheduler):
+    def __init__(self, rcvbufmax, sndbufmax, subflows, scheduler: Scheduler):
         """
         Args:
             sndbufmax: Maximum size of the buffer
         """
-        # For now it 
+        # For now it
         self.snd_buf_max = sndbufmax
-        self.scheduler = scheduler 
-        self._snd_next = 0    # left edge of the window/dsn (rename to snd_una ?) 
+        self.scheduler = scheduler
+        self._snd_next = 0    # left edge of the window/dsn (rename to snd_una ?)
         self._snd_una = 0
-        self.rcv_wnd = rcvbufmax # there is no 3WHS so no way to get the bufmax
+        self.rcv_wnd = rcvbufmax  # there is no 3WHS so no way to get the bufmax
         # self.bytes_sent = 0
         # """total bytes sent at the mptcp level, i.e., different bytes"""
-        self.constraints = []
+        self.constraints = []  # type: ignore
 
         self.subflows = subflows
-        log.info("Sender with scheduler %s" % self.scheduler)
+        log.info("Sender with scheduler %s", self.scheduler)
 
     @property
     def snd_una(self):
@@ -327,7 +325,7 @@ class MpTcpSender:
 
         """
         c = Constraint(Simulator.current_time, size, available_window)
-        log.debug("New constraint: %r < %s" % (c.size, available_window) )
+        log.debug("New constraint: %r < %s" % (c.size, available_window))
         # y ajouter la contrainte
         self.constraints.append(c)
 
@@ -358,24 +356,24 @@ class MpTcpSender:
 
         # TODO registers an event that unblocks this subflow
         log.debug("Mimicking an RTO => Needs to drop this pkt")
-        e = EventStopRTO(sf_id) 
+        e = EventStopRTO(sf_id)
         e.dsn = dsn
         e.delay = self.subflows[sf_id].rto
         self.subflows[sf_id].state = SubflowState.RTO
         return e
 
-    def send_on_subflow(self, sf_id, retransmit_dsn=None, ): 
+    def send_on_subflow(self, sf_id, retransmit_dsn=None, ):
         """
         Sender.
         rely on MpTcpSubflow:generate_pkt function
         """
         print("subflow state", self.subflows[sf_id].state)
 
-        log.debug("send_on_subflow for [%s]" % sf_id)
+        log.debug("send_on_subflow for [%s]", sf_id)
 
         retransmit = True if retransmit_dsn is not None else False
         if retransmit:
-            log.debug("Retransmitting dsn %s" % retransmit_dsn)
+            log.debug("Retransmitting dsn %s", retransmit_dsn)
 
             assert self.subflows[sf_id].state == SubflowState.RTO
             self.subflows[sf_id].state = SubflowState.Available
@@ -393,7 +391,7 @@ class MpTcpSender:
             pkt = self.subflows[sf_id].generate_pkt(dsn)
             self.snd_next += pkt.size
             # max(self.snd_next + pkt.size, self.snd_next)
-            log.debug("Sending on subflow [%s] packet %s" % (sf_id, pkt))
+            log.debug("Sending on subflow [%s] packet %s", sf_id, pkt)
 
             self.add_flow_control_constraint(pkt.size, available_sndbuf)
             self.add_flow_control_constraint(pkt.size, self.rcv_wnd)
@@ -408,23 +406,26 @@ class MpTcpSender:
     #     return e
 
     def __str__(self):
-        res = "SND.MAX={snd_max} Nxt={nxt} UNA={una}".format(
-                snd_max=self.snd_buf_max,
-                nxt = self.snd_next,
-                una=self.snd_una,
-                )
+        res = """
+        MPTCP Sender:
+        SND.MAX={snd_max} Nxt={nxt} UNA={una}
+        """.format(
+            snd_max=self.snd_buf_max,
+            nxt=self.snd_next,
+            una=self.snd_una,
+        )
         return res
 
     def __repr__(self):
-        #:
         res = self.__str__()
         res += "Subflows:\n"
         for sf in self.subflows:
             # print ( " == Subflows ==")
             res += "- id={id} cwnd={cwnd}".format(
-                    cwnd=sf["cwnd"],
-                    id=sf["id"],
-                    )
+                # cwnd=sf["cwnd"],
+                # id=sf["id"],
+                **sf
+            )
 
     def recv(self, p):
         """
@@ -434,10 +435,9 @@ class MpTcpSender:
         pass a bool or function to choose how to increase cwnd ?
         needs to return a list
         """
-        log.debug("Sender received packet %r %s " % (p, type(p)))
+        log.debug("Sender received packet %r %s ", p, type(p))
 
-
-        # rto on that subflow 
+        # rto on that subflow
         if isinstance(p, EventStopRTO):
             raise Exception("FIX THIS")
             # sf = self.subflows[p.subflow_id]
@@ -445,7 +445,7 @@ class MpTcpSender:
             # return self.send_on_subflow(sf.name, p.dsn)
 
         # TODO
-        log.debug("comparing %s (dack) > %s (una) => result = %s " % (p.dack, self.snd_una, p.dack > self.snd_una ))
+        log.debug("comparing %s (dack) > %s (una) => result = %s " % (p.dack, self.snd_una, p.dack > self.snd_una))
 
 #   // Test for conditions that allow updating of the window
 #   // 1) segment contains new data (advancing the right edge of the receive
@@ -455,7 +455,7 @@ class MpTcpSender:
 #   // 3) the advertised window is larger than the current send window
 #         self.snd_una= max(self.snd_una, p.dack)
         # TODO should update
-        print( p.dack > self.snd_una )
+        print(p.dack > self.snd_una)
         if p.dack >= self.snd_una:
             log.debug("Acking ")
             self.rcv_wnd = p.rcv_wnd
@@ -467,7 +467,7 @@ class MpTcpSender:
             log.warn("Not advancing rcv_wnd")
 
         # TODO we should not ack if in disorder ?
-        self.subflows[p.subflow_id].ack_window ()
+        self.subflows[p.subflow_id].ack_window()
 
         # for name,sf in self.subflows.items():
         #     if p.dack >= self.left_edge():
@@ -475,7 +475,6 @@ class MpTcpSender:
 
         # return self.send(p.subflow_id)
         # TODO regenerate packets
-            # now loo
         # cwnd
         return self.send()
 
@@ -521,6 +520,13 @@ class MpTcpReceiver:
         self._subflows = subflows  # type: Dict[str, MpTcpSubflow]
         """ Dictionary of subflows """
 
+    def __str__(self):
+        msg = """
+        Mptcp Receiver:
+
+        """
+        return msg
+
     @property
     def rcv_next(self):
         return self._rcv_next
@@ -535,23 +541,12 @@ class MpTcpReceiver:
     @property
     def subflows(self):
         return self._subflows
-    # def inflight(self):
-    #     raise Exception("TODO")
-    #     # return map(self.subflows)
-    #     pass
-
-    # def __setattr__(self, name, value):
-
-
-# # TODO set it as a property instead
-    #     if name == "rcv_next":
-    #     self.__dict__[name] = value
 
     # rename to advertised_window()
     def window_to_advertise(self):
         ooo = 0
         for block in self.out_of_order:
-            print("BLOCK=%r", block)
+            # print("BLOCK=%r", block)
             ooo += block.size
 
         return self.rcv_wnd_max - ooo
@@ -595,24 +590,23 @@ class MpTcpReceiver:
         """
         log.debug("Starting updateing out_of_order (OOO)")
         log.debug("Old list %s", self.out_of_order)
-        print("update_out_of_order")
         # sort by dsn
         temp = sorted(self.out_of_order, key=lambda x: x[0])
         new_list = []
         # todo use size instead
         for block in temp:
-            print("rcv_next={nxt} Block={block}".format(
+            log.debug("rcv_next={nxt} Block={block}".format(
                 nxt=self.rcv_next,
                 block=block,
             )
             )
             if self.rcv_next == block.dsn:
                 # += ?
-                log.debug("OOO packet becomes inorder {b}".format(b=block))
+                log.debug(f"OOO packet becomes inorder {block}")
                 self.rcv_next = block.dsn + block.size
                 # log.debug ("updated ")
             else:
-                log.debug("Remaining OOO: {b}".format(b=block))
+                log.debug("Remaining OOO: {block}")
                 new_list.append(block)
 
         # swap old list with new one
@@ -632,7 +626,7 @@ class MpTcpReceiver:
         #     raise Exception("Error")
 
 
-        log.debug("Receiver received packet %s" % p)
+        log.debug("Receiver received packet %s", p)
         packets = []
 
         headSeq = p.dsn
@@ -648,7 +642,7 @@ class MpTcpReceiver:
         #     headSeq = self.rcv_next
 
         if headSeq > self.rcv_next:
-            log.debug("out of order packet %s" % p)
+            log.debug("out of order packet %s", p)
             # if programmed correctly all packets should be within bounds
             # if headSeq > self.right_edge():
             #     raise Exception("packet out of bounds")
@@ -657,7 +651,7 @@ class MpTcpReceiver:
             block = OutOfOrderBlock(headSeq, p.size)
             self.out_of_order.append(block)
         elif headSeq == self.rcv_next:
-            log.debug("Inorder packet %s" % p)
+            log.debug("Inorder packet %s", p)
             self.rcv_next += p.size
 
         # else:
@@ -718,11 +712,11 @@ by rcv_window
         http://www.grantjenks.com/docs/sortedcontainers/sortedlistwithkey.html#id1
 
     """
-# TODO when possible move it to
+    # TODO when possible move it to
     current_time = 0
-        # should be ordered according to time
-        # events = []
-    def __init__(self, config, sender : MpTcpSender, receiver : MpTcpReceiver):
+    # should be ordered according to time
+    # events = []
+    def __init__(self, config, sender: MpTcpSender, receiver: MpTcpReceiver):
         """
         current_time is set to the time of the current event
 
@@ -737,14 +731,13 @@ by rcv_window
         self.receiver = receiver
         self.events = sortedcontainers.SortedListWithKey(key=lambda x: x.time)
         self.time_limit = None
-        # self.current_time = 0
         """
         :ivar current_time this is a test
         """
 
         # list of constraints that will represent the problem when simulation ends
         # TODO remove ?
-        self.constraints = []
+        self.constraints = []  # type: ignore
 
         self.finished = False
         """True when simulation has ended"""
@@ -764,10 +757,10 @@ by rcv_window
         assert p.time >= self.current_time, "Event in the past !!"
 
         if self.time_limit and self.current_time > self.time_limit:
-            print("Can't register an event after simulation limit ! Break out of the loop")
+            log.error("Can't register an event after simulation limit ! Break out of the loop")
             return
 
-        log.info("Adding event %s " % p)
+        log.debug("Adding event %s ", p)
 
         # VERY IMPORTANT
         # if p.direction == Receiver:
@@ -776,7 +769,7 @@ by rcv_window
         # todo sauvegarder le temps, dsn, size necessaire
         # self.constraints.append()
         self.events.add(p)
-        print(len(self.events), " total events")
+        log.debug("total events in sim: %d", len(self.events), )
 
 
     # solve_constraints
@@ -805,8 +798,6 @@ by rcv_window
     #     """
     #     pb = None
     #     tab = {SymbolNames.ReceiverWindow.value: None,}
-
-
     #     # TODO pb.extend
     #     # TODO can use with sequentialSolve
     #     # TODO build translation table
@@ -827,7 +818,7 @@ by rcv_window
         Starts running the simulation
         """
         assert not self.is_finished()
-        log.info("Starting simulation,  %d queued events " % len(self.events))
+        log.info("Starting simulation,  %d queued events ", len(self.events))
         for e in self.events:
 
             self.current_time = e.time
@@ -875,3 +866,16 @@ by rcv_window
         """
         log.info("Setting stop_time to %d", stop_time)
         self.time_limit = stop_time
+
+    def describe(self) -> str:
+        '''
+        Generate a string describing current simulation status
+        '''
+        msg = """
+        Sender: {sender}
+        Receiver: {receiver}
+        """.format(
+            sender=self.sender,
+            receiver=self.receiver,
+        )
+        return msg
