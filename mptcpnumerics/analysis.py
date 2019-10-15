@@ -194,6 +194,7 @@ class HOLTypes(Enum):
 
 
 # TODO make it a dataclass ?
+@dataclass
 class Event:
     """
     Describe an event in simulator.

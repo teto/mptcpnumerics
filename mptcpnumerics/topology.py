@@ -100,6 +100,12 @@ class MpTcpSubflow:
     def rx(self):
         return self._rx_bytes
 
+    @rx.setter
+    def rx(self, value):
+        # log.
+        print("New RX for sf %s !  %s -> %s" % (self.name, self._rx_bytes, value))
+        self._rx_bytes = value
+
     @property
     def throughput(self):
         """
@@ -107,11 +113,6 @@ class MpTcpSubflow:
         """
         return self.cwnd_from_file * self.mss / self.rtt
 
-    @rx.setter
-    def rx(self, value):
-        # log.
-        print("New RX for sf %s !  %s -> %s" % (self.name, self._rx_bytes, value))
-        self._rx_bytes = value
 
     @property
     def state(self):
@@ -198,7 +199,7 @@ class MpTcpSubflow:
             self.name,
             self.fowd,
             dsn,
-            size=self.sp_cwnd * self.sp_mss
+            self.sp_cwnd * self.sp_mss
         )
         # e.delay = self.fowd
         # e.subflow_id = self.name
