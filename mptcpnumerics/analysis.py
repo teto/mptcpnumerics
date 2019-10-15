@@ -16,11 +16,11 @@ import pulp as pu
 import pprint
 from mptcpnumerics import SubflowState
 from mptcpnumerics.scheduler import Scheduler
-from typing import Dict
+from typing import Dict, Sequence, Any
 from functools import wraps
+from dataclasses import dataclass, field
 
 log = logging.getLogger("mptcpnumerics")
-
 
 constraint_types = [
     "buffer",
@@ -57,6 +57,19 @@ def analyze_results(ret):
         print("Variable to optimize: ", name, "(", type(name), ") =", pu.value(value), "(", type(value), ")")
     # print("Throughput")
     pp.pprint(ret)
+
+@dataclass
+class OutOfOrderBlock:
+    # symbols maybe ?
+    dsn: int
+    size: int
+
+@dataclass
+class Constraint:
+    time: int
+    size: int
+    wnd: int
+
 
 
 # to drop
@@ -179,24 +192,33 @@ class HOLTypes(Enum):
     # Transmission-Induced Sender Buffer Blocking (TSB)
 
 
+
+# TODO make it a dataclass ?
 class Event:
     """
     Describe an event in simulator.
     As it is
-    """
 
-    def __init__(self, sf_id, **args):
-        """
         special a list of optional features listed in EventFeature
         Either set 'delay' (respective) or 'time' (absolute scheduled time)
         direction => destination of the packet TODO rename
-        """
-        # self.direction = direction
-        self.time = None
-        self.subflow_id = sf_id
-        self.delay = None
+    """
+    time: int
+    subflow_id: str
+    delay: None
+    # special: Sequence[Any] = field(default_factory=list)
 
-        self.special = []
+    # def __init__(self, sf_id, **args):
+    #     """
+    #     """
+    #     # self.direction = direction
+    #     self.time = None
+    #     self.subflow_id = sf_id
+    #     self.delay = None
+    #     self.special = []
+
+    def __post_init__(self, ):
+        assert self.time or self.delay > 0
 
     def __str__(self):
         return "Scheduled with delay {s.delay} ".format(
@@ -205,45 +227,43 @@ class Event:
         )
 
 
+@dataclass
 class SenderEvent(Event):
-    def __init__(self, sf_id):
-        """
-        :param dsn in bytes
-        :param size in bytes
-        """
-        super().__init__(sf_id, )
-        self.dsn = None
-        self.size = None
+    """dsn in bytes"""
+    dsn: int = None
+    """size in bytes"""
+    size: int = None
 
     def __str__(self):
         res = super().__str__()
         res += " dsn={s.dsn} size={s.size}".format(s=self)
         return res
 
+@dataclass
 class EventStopRTO(SenderEvent):
     # def __init__()
     pass
 
-# @froze_it
+@dataclass
 class ReceiverEvent(Event):
+    # in case Sack is used
+    # are these ints or sympy characters ?
+    dack = None
+    rcv_wnd = None
+    blocks: Sequence[OutOfOrderBlock] = field(default_factory=list)
 
-    def __init__(self, sf_id):
-        """
-        :param blocks Out of order blocks as in SACK
-        """
-        super().__init__(sf_id, )  # Direction.Sender)
-
-        self.dack = None
-        self.rcv_wnd = None
-
-        # in case Sack is used
-        self.blocks = []
+    # def __init__(self, sf_id):
+    #     """
+    #     :param blocks Out of order blocks as in SACK
+    #     """
+    #     super().__init__(sf_id, )  # Direction.Sender)
+    #     self.dack = None
+    #     self.rcv_wnd = None
 
     def __str__(self):
         res = super().__str__()
         res += " dack={s.dack} rcv_wnd={s.rcv_wnd}".format(s=self)
         return res
-
 
 
 
@@ -333,7 +353,7 @@ class MpTcpSender:
         """
         Rely on the scheduler
         """
-        log.info("Subflow send  with fainting sf %s" % fainting_subflow)
+        log.info("Subflow send  with fainting sf %s", fainting_subflow)
         # TODO depends on self.scheduler ?
         # packets = []
         # for name, sf in self.subflows.items():
@@ -408,11 +428,14 @@ class MpTcpSender:
     def __str__(self):
         res = """
         MPTCP Sender:
-        SND.MAX={snd_max} Nxt={nxt} UNA={una}
+        SND.MAX={s.snd_buf_max}
+        Nxt={s.snd_next}
+        UNA={s.snd_una}
         """.format(
-            snd_max=self.snd_buf_max,
-            nxt=self.snd_next,
-            una=self.snd_una,
+            s=self,
+            # snd_max=self.snd_buf_max,
+            # nxt=self.snd_next,
+            # una=self.snd_una,
         )
         return res
 
@@ -484,8 +507,6 @@ class MpTcpSender:
 #     Sender = 1
 
 
-OutOfOrderBlock = namedtuple('OutOfOrderBlock', ['dsn', 'size'])
-Constraint = namedtuple('Constraint', ['time', 'size', 'wnd'])
 # print("%r", OutOfOrderBlock)
 # b = OutOfOrderBlock(40,30)
 # print(b.dsn)
@@ -523,8 +544,11 @@ class MpTcpReceiver:
     def __str__(self):
         msg = """
         Mptcp Receiver:
-
-        """
+        rcv_wnd_max: {s.rcv_wnd_max}
+        wnd: {s.wnd}
+        _rcv_next: {s._rcv_next}
+        Out of order blocks: {s.out_of_order}
+        """.format(s=self)
         return msg
 
     @property
@@ -684,12 +708,11 @@ class MpTcpReceiver:
 
 class Simulator:
     """
-Hypotheses made in this simulator:
-- subflows send full windows each time
-- there is no data duplication, NEVER !
-- windows are stable, they don't change because you reach the maximum size allowed
-by rcv_window
-
+    Hypotheses made in this simulator:
+    - subflows send full windows each time
+    - there is no data duplication, NEVER !
+    - windows are stable, they don't change because you reach the maximum size allowed
+    by rcv_window
 
     Todo:
         -use a framework to trace some variables (save into a csv for instance)
@@ -813,13 +836,16 @@ by rcv_window
     #     # print("Using tab=", tab)
 
 
-    def run(self):
+    def run(self, summarize_every=10, **kwargs):
         """
         Starts running the simulation
         """
         assert not self.is_finished()
-        log.info("Starting simulation,  %d queued events ", len(self.events))
-        for e in self.events:
+        log.info("Starting simulation, %d queued events ", len(self.events))
+        for eventId, e in enumerate(self.events):
+
+            if eventId % summarize_every == 0:
+                print(self.describe())
 
             self.current_time = e.time
             # if self.time_limit and self.current_time > self.time_limit:
@@ -829,7 +855,7 @@ by rcv_window
                 log.debug("Aborting simulation because reached time limit %d" % self.time_limit)
                 break
 
-            log.debug("%d: running event %r" % (self.current_time, e))
+            log.debug("%d: running event %r", self.current_time, e)
             # events emitted by host
             new_events = []
             if isinstance(e, ReceiverEvent):
@@ -851,6 +877,7 @@ by rcv_window
                 log.error("No pkt sent by either receiver or sender")
 
         self.finished = True
+        # Todo call stop ?
 
         # disabled when abrut end of simulation
         assert len(self.receiver.out_of_order) == 0, "Still out of order packets "
@@ -867,15 +894,21 @@ by rcv_window
         log.info("Setting stop_time to %d", stop_time)
         self.time_limit = stop_time
 
-    def describe(self) -> str:
+    def describe(self, list_events=False) -> str:
         '''
         Generate a string describing current simulation status
         '''
         msg = """
         Sender: {sender}
         Receiver: {receiver}
+        Simulation duration: {s.time_limit}
+        Current time: {s.current_time}
+        Finished ? {s.finished}
         """.format(
             sender=self.sender,
             receiver=self.receiver,
+            s=self,
         )
+        if list_events:
+            msg = msg + str(self.events)
         return msg

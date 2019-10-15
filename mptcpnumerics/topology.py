@@ -193,11 +193,17 @@ class MpTcpSubflow:
         """
         assert self.state == SubflowState.Available
 
-        e = SenderEvent(self.name)
-        e.delay = self.fowd
+        e = SenderEvent(
+            None,
+            self.name,
+            self.fowd,
+            dsn,
+            size=self.sp_cwnd * self.sp_mss
+        )
+        # e.delay = self.fowd
         # e.subflow_id = self.name
-        e.dsn = dsn
-        e.size = self.sp_cwnd * self.sp_mss
+        # e.dsn = dsn
+        # e.size = self.sp_cwnd * self.sp_mss
 
         # print("packet size %r"% e.size)
 

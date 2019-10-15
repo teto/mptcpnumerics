@@ -534,19 +534,22 @@ class MpTcpNumerics(Cmd):
         sim = Simulator(self.config, sender, receiver)
         log.info("Initialized simulation with: ")
         log.info(sim.describe())
-        sys.exit(1)
 
         # we start sending a full window over each path
         # sort them depending on fowd
         log.info("Initial send")
+
         events = sender.send(fainting_subflow)
         for event in events:
             sim.add(event)
+
+        sys.exit(1)
+
+
         # subflows = sender.subflows.values()
         # TODO we should send on the fainting subflow first
         # ordered_subflows = sorted(self.subflows.values(), key=lambda x: x.fowd, reverse=True)
 
-        # # global current_time
         # # here we just setup the system
         # for sf in ordered_subflows:
 

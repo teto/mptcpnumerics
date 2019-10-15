@@ -12,7 +12,7 @@ class Scheduler:
     Implemented as a class to be able to retain some state
     """
 
-    def send(self,  sender):
+    def send(self, sender):
         """
         Should return packets
         """
@@ -24,7 +24,7 @@ class GreedyScheduler(Scheduler):
     Sends as soon as it can
 
     Attributes:
-        increasing_order: if None, use dict order, else sort fowd increasingly (False) 
+        increasing_order: if None, use dict order, else sort fowd increasingly (False)
         or decreasingly (True)
     """
     def __init__(self, sort_by_increasing_fowd: bool = None):
@@ -46,7 +46,7 @@ class GreedyScheduler(Scheduler):
         #an ordered dictionary remembers its insertion order,
         if self.increasing_order is not None:
             ordered_subflows = sorted(sender.subflows.values(), key=lambda x: x.fowd, reverse=self.increasing_order)
-            print("ordered by fowd") #, type(subflow_list))
+            print("ordered by fowd")  # , type(subflow_list))
         else:
             print("ordered by key")
             ordered_subflows = OrderedDict(sorted(sender.subflows.items(), key=lambda t: t[0]))
@@ -65,9 +65,9 @@ class GreedyScheduler(Scheduler):
             # ca genere des contraintes
             # pkt = sf.generate_pkt(0, sender.snd_next)
             if not sf.can_send():
-                log.debug("sf %s can't send ( skipping..." % sf.name)
+                log.debug("sf %s can't send (skipping...)", sf.name)
                 continue
-            
+
             pkt = sender.send_on_subflow(sf.name, )
             # print("<<< Comparing %s with %s " % (sf, fainting_subflow))
             if sf == fainting_subflow:
@@ -83,10 +83,8 @@ class GreedyScheduler(Scheduler):
 class GreedySchedulerIncreasingFOWD(GreedyScheduler):
     def __init__(self):
         super().__init__(False)
-        
+
 class GreedySchedulerDecreasingFOWD(GreedyScheduler):
     def __init__(self):
         super().__init__(True)
         #
-
-    
