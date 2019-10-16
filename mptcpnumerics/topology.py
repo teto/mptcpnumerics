@@ -66,6 +66,10 @@ class MpTcpSubflow:
     # InitVar[list]
 
     def __post_init__(self, pacing, rtt_us, rto_us, **kwargs):
+        assert self.fowd > 0
+        assert self.bowd > 0
+        assert self.bowd + self.fowd > 0
+
         self.sp_cwnd = sp.Symbol(generate_cwnd_name(self.name), positive=True)
 
         # provide an upperbound to sympy so that it can deduce out of order packets etc...
