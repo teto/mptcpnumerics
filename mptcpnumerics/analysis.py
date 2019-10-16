@@ -14,11 +14,12 @@ from collections import namedtuple
 import sortedcontainers
 import pulp as pu
 import pprint
-from mptcpnumerics import SubflowState
+from mptcpnumerics import SubflowState, TRACE
 from mptcpnumerics.scheduler import Scheduler
 from typing import Dict, Sequence, Any
 from functools import wraps
 from dataclasses import dataclass, field
+import datetime
 
 log = logging.getLogger("mptcpnumerics")
 
@@ -204,22 +205,13 @@ class Event:
         Either set 'delay' (respective) or 'time' (absolute scheduled time)
         direction => destination of the packet TODO rename
     """
-    time: int
+    time: datetime.timedelta
     subflow_id: str
     delay: None
     # special: Sequence[Any] = field(default_factory=list)
 
-    # def __init__(self, sf_id, **args):
-    #     """
-    #     """
-    #     # self.direction = direction
-    #     self.time = None
-    #     self.subflow_id = sf_id
-    #     self.delay = None
-    #     self.special = []
-
     def __post_init__(self, ):
-        assert self.time or self.delay > 0
+        assert self.time or self.delay
 
     def __str__(self):
         return "Scheduled with delay {s.delay} ".format(
@@ -249,8 +241,8 @@ class EventStopRTO(SenderEvent):
 class ReceiverEvent(Event):
     # in case Sack is used
     # are these ints or sympy characters ?
-    dack = None
-    rcv_wnd = None
+    dack: int = None
+    rcv_wnd: int = None
     blocks: Sequence[OutOfOrderBlock] = field(default_factory=list)
 
     # def __init__(self, sf_id):
@@ -530,9 +522,9 @@ class MpTcpReceiver:
         :
         """
         self.config = config
+        self.capabilities = []
         # self.rcv_wnd_max = max_rcv_wnd
         # rcv_left, rcv_wnd, rcv_max_wnd = sp.symbols("dsn_{rcv} w_{rcv} w^{max}_{rcv}")
-        # self.subflows = {} #: dictionary of dictionary subflows
         self.rcv_wnd_max = rcv_wnd
         self.wnd = self.rcv_wnd_max
         self._rcv_next = 0
@@ -560,7 +552,6 @@ class MpTcpReceiver:
     def rcv_next(self, val):
 
         log.debug("Changing rcv_next to %s", val)
-
         self._rcv_next = val
 
     @property
@@ -598,13 +589,17 @@ class MpTcpReceiver:
         """
         """
         # super().gen_packet(direction=)
-        log.debug("Generating ack for sf_id=%s" % sf_id)
+        log.debug("Generating ack for sf_id=%s", sf_id)
         # TODO
         # self.subflows[sf_id].ack_window()
-        e = ReceiverEvent(sf_id)
-        e.delay = self.subflows[sf_id].bowd
-        e.dack = self.rcv_next
-        e.rcv_wnd = self.window_to_advertise()
+        # time / sf_id_ deaul
+        e = ReceiverEvent(
+            None,
+            sf_id,
+            self.subflows[sf_id].bowd,  # delay
+            self.rcv_next,  # dack
+            self.window_to_advertise()  # rcv_wnd
+        )
         return e
 
 
@@ -616,7 +611,7 @@ class MpTcpReceiver:
         log.debug("Starting updateing out_of_order (OOO)")
         log.debug("Old list %s", self.out_of_order)
         # sort by dsn
-        temp = sorted(self.out_of_order, key=lambda x: x[0])
+        temp = sorted(self.out_of_order, key=lambda x: x.dsn)
         new_list = []
         # todo use size instead
         for block in temp:
@@ -700,6 +695,7 @@ class MpTcpReceiver:
         #     pass
         # else:
         e = self.generate_ack(p.subflow_id)
+        log.log(TRACE, "Ack %s", e)
         packets.append(e)
 
         # print(packets)
@@ -737,7 +733,7 @@ class Simulator:
 
     """
     # TODO when possible move it to
-    current_time = 0
+    current_time = datetime.timedelta(0)
     # should be ordered according to time
     # events = []
     def __init__(self, config, sender: MpTcpSender, receiver: MpTcpReceiver):
@@ -853,7 +849,7 @@ class Simulator:
             #     print("Duration of simulation finished ! Break out of the loop")
             #     break
             if self.time_limit and self.current_time >= self.time_limit:
-                log.debug("Aborting simulation because reached time limit %d" % self.time_limit)
+                log.debug("Aborting simulation because reached time limit %s", self.time_limit)
                 break
 
             log.debug("%d: running event %r", self.current_time, e)
@@ -889,11 +885,11 @@ class Simulator:
         # self.sender.constraints()
         # return constraints
 
-    def stop(self, stop_time):
+    def stop(self, stop_time: datetime.timedelta):
         """
         """
         log.info("Setting stop_time to %d", stop_time)
-        self.time_limit = stop_time
+        self.time_limit = stop_time  # type: ignore
 
     def describe(self, list_events=False) -> str:
         '''

@@ -14,12 +14,12 @@ import math
 
 log = logging.getLogger(__name__)
 
-# Call it raw ?
+def to_timedelta(us):
+    return datetime.timedelta(microseconds=us)
+
 @dataclass
 class MpTcpSubflow:
     """
-    @author Matthieu Coudron
-
     Attributes:
         name (str): Identifier of the subflow
         cwnd: careful, there are 2 variables here, one symbolic, one a hard value
@@ -39,8 +39,8 @@ class MpTcpSubflow:
     mtu: int
     rttvar: int
     delivery_rate: float
-    fowd: int
-    bowd: int
+    fowd: datetime.timedelta
+    bowd: datetime.timedelta
     retrans: int
     snd_cwnd: int
     delivered: int
@@ -51,7 +51,7 @@ class MpTcpSubflow:
     # rtt: int = field(init=False)
     # rto: int = field(init=False)
     """ use = field(default_factory=False)"""
-    min_rtt: int
+    min_rtt: datetime.timedelta
     loss_rate: float = field(init=False)
 
     # kept for backwards compatibility
@@ -66,9 +66,6 @@ class MpTcpSubflow:
     # InitVar[list]
 
     def __post_init__(self, pacing, rtt_us, rto_us, **kwargs):
-        assert self.fowd > 0
-        assert self.bowd > 0
-        assert self.bowd + self.fowd > 0
 
         self.sp_cwnd = sp.Symbol(generate_cwnd_name(self.name), positive=True)
 
@@ -87,6 +84,10 @@ class MpTcpSubflow:
         # self.sp_tx = 0
         self._rx_bytes = 0  # sp.Symbol(generate_rx_name(name), positive=True)
         self.min_rtt = datetime.timedelta(microseconds=self.min_rtt)
+        self.fowd = to_timedelta(self.fowd)
+        self.bowd = to_timedelta(self.bowd)
+
+        # TODO need to postprocess the fowd
 
         self._state = SubflowState.Available
         """
@@ -95,10 +96,18 @@ class MpTcpSubflow:
         """
 
         self.loss_rate = self.lost / self.delivered
+        zero_delay = datetime.timedelta(microseconds=0)
+        assert self.fowd > zero_delay
+        assert self.bowd > zero_delay
+        assert self.rtt > zero_delay
+        assert self.min_rtt > zero_delay
 
     # @property
     # def loss_rate(self):
     #     return self.lost / self.delivered
+    @property
+    def mss(self):
+        return self.mtu - 40
 
     @property
     def rx(self):

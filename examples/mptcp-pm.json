@@ -1,6 +1,6 @@
 {
     "sender": {
-        "snd_buffer": 40,
+        "snd_buffer": 62040,
         "capabilities": {}
     },
     "name": "1041294640",

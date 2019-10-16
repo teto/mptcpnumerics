@@ -26,9 +26,11 @@ import importlib
 import datetime
 from mptcpnumerics import problem, round_rtt
 # from . import *
-from mptcpnumerics import SymbolNames
+from mptcpnumerics import SymbolNames, TRACE
 # from voluptuous import Required, All, Length, Range
 # from jsonschema import validate
+
+
 
 log = logging.getLogger("mptcpnumerics")
 # log.setLevel(logging.DEBUG)
@@ -140,10 +142,13 @@ class MpTcpNumerics(Cmd):
         return max_rto, buf_rto
 
     def get_fastrestransmit_buf(self):
+        """Required buffer as perf the RFC"""
         subflows = list(self.subflows.values())
-        # les convertir en timedelta
         # rtts = map(lambda x: datetime.timedelta(microseconds=x.rtt), subflows)
-        max_rtt = max(map(lambda x: x.rtt.microseconds/1000), subflows)
+        # max_rtt = max(map(lambda x: x.rtt.microseconds), subflows)
+
+        # we want in seconds ? depends on througput
+        max_rtt = max(rtts) / 1000
         buf_fastretransmit = sum(map(lambda x: 2 * x.throughput * max_rtt, subflows))
         return max_rtt, buf_fastretransmit
 
@@ -196,7 +201,7 @@ class MpTcpNumerics(Cmd):
         max_bowd = max(self.subflows, key="bowd")
         return max_fowd + max_bowd
 
-    def compute_cycle_duration(self, minimum=0):
+    def compute_cycle_duration(self, minimum=0) -> datetime.timedelta:
         """
         returns (approximate lcm of all subflows), (perfect lcm ?)
 
@@ -213,7 +218,7 @@ class MpTcpNumerics(Cmd):
 
         res = max(lcm, minimum)
         log.info("cycle duration of %d", res)
-        return res
+        return datetime.timedelta(milliseconds=res)
         # sp.lcm(rtt)
 
     parser = argparse.ArgumentParser(
@@ -402,7 +407,8 @@ class MpTcpNumerics(Cmd):
 
         # TODO s'il y a le spread, il faut relancer le processus d'optimisation avec la contrainte
         pb = problem.ProblemOptimizeCwnd(
-            self.config["receiver"]["rcv_buffer"],  # size of the
+            # self.config["receiver"]["rcv_buffer"],  # size of the
+            self.config["sender"]["snd_buffer"],  # size of the
             "Subflow congestion windows repartition that maximizes goodput", )
 
         pb.generate_lp_variables(sim.sender.subflows)
@@ -412,6 +418,7 @@ class MpTcpNumerics(Cmd):
         # mptcp_throughput = sim.sender.bytes_sent
         total_bytes = sim.receiver.rcv_next  #  since ISN is 0
         # print("mptcp_throughput",  mptcp_throughput)
+        log.info(sim.describe())
         pb.setObjective(total_bytes)
 
         # add constraints from the simulation
@@ -514,7 +521,8 @@ class MpTcpNumerics(Cmd):
 
 
         # Instantiate a scheduler
-        scheduler_name = self.config["sender"].get("scheduler", "GreedySchedulerIncreasingFOWD")
+        scheduler_name = self.config["sender"].get(
+            "scheduler", "GreedySchedulerIncreasingFOWD")
         class_ = getattr(importlib.import_module("mptcpnumerics.scheduler"), scheduler_name)
         scheduler = class_()
         log.info("Set scheduler to %s", scheduler)
@@ -543,7 +551,7 @@ class MpTcpNumerics(Cmd):
         for event in events:
             sim.add(event)
 
-        sys.exit(1)
+        # sys.exit(1)
 
 
         # subflows = sender.subflows.values()
@@ -595,7 +603,6 @@ class MpTcpNumerics(Cmd):
         # parser.add_argument(outputhelp="")
         # parser.add_argument(help="")
         args = parser.parse_args(line)
-
 
     # def do_plot_overhead(self, args):
         """

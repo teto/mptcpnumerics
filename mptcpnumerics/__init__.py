@@ -1,5 +1,10 @@
 from enum import Enum, IntEnum
 import math
+import logging
+
+TRACE = 5
+
+logging.addLevelName(TRACE, 'TRACE')
 
 def round_rtt(rtt, mul=5):
     rtt_i = math.floor(rtt)

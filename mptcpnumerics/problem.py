@@ -30,10 +30,11 @@ class MpTcpProblem(pu.LpProblem):
         :param rcv_buffer: might be the symbolic value or an integer
 
         """
+        log.debug("Instantiation of %s", self.__class__.__name__)
         super().__init__(*args, **kwargs)
         # todo move rcv_buffer to
         # self.rcv_buffer = rcv_buffer
-        self.lp_variables_dict = {}  # "subflows": {} }
+        self.lp_variables_dict = {}
         """Dictionary of lp variables that maps symbolic names to lp variables"""
 
         self.add_mapping(SymbolNames.ReceiverWindow.value, rcv_buf)
@@ -48,12 +49,11 @@ class MpTcpProblem(pu.LpProblem):
             return inspect.getmodule(obj).__package__.startswith("sympy")
 
         except Exception as e:
-            log.debug("Not a sympy variable: %s" % e)
+            log.debug("Not a sympy variable: %s", e)
             return False
 
     def setObjective(self, obj):
-        # print("inspect,",inspect.getmodule(obj))
-        # print("inspect,",inspect.getmodule(obj) in sp)
+        log.debug("Setting objective to %s", obj)
         if self.is_sympy(obj):
             log.debug("Converting objective")
             obj = self.sp_to_pulp(obj)
@@ -66,10 +66,10 @@ class MpTcpProblem(pu.LpProblem):
         """
         Add mapping sympy -> pulp or integer
         """
+        log.debug("Trying to add entry %s=%r", name, value)
         if warn_if_exists and name in self.lp_variables_dict:
             raise ValueError("[%s] Already defined" % name)
 
-        log.debug("Adding entry %s=%r" % (name, value))
         self.lp_variables_dict[name] = value
 
 
@@ -80,7 +80,7 @@ class MpTcpProblem(pu.LpProblem):
 
         Should depend of the mode ? for the receiver window ?
         """
-        log.debug("Generating lp variables from subflows: %s" % subflows)
+        log.debug("Generating lp variables from subflows: %s", subflows)
         # generate subflow specific variables
         for name, sf in subflows.items():
             # TODO set upBound later ? as a constraint
@@ -113,13 +113,14 @@ class MpTcpProblem(pu.LpProblem):
         # StrictLessThan or childof
         # if isinstance(other,sympy.core.relational.Unequality):
         # if isinstance(other, sp.relational.Relational):
-        log.debug("iadd: %s" % type(other))
+        log.debug("iadd: %s", type(other))
 
         if isinstance(other, Constraint):
             constraint = other
-            print("Adding constraint: ", constraint)
-            print(" constraint.wnd: ", constraint.wnd, type(constraint.wnd))
-            # HACK ideally my fork should automatically convert toa pulp constraint but that does not work
+            log.debug("Adding constraint: %s", constraint)
+            log.debug(" constraint.wnd: %s %s ", constraint.wnd, type(constraint.wnd))
+            # HACK ideally my fork should automatically convert to
+            # a pulp constraint but that does not work
             constraint = self.sp_to_pulp(constraint.size) <= self.sp_to_pulp(constraint.wnd)
 
         elif self.is_sympy(other):
@@ -129,7 +130,7 @@ class MpTcpProblem(pu.LpProblem):
             lconstraint = self.sp_to_pulp(other.lhs)
             rconstraint = self.sp_to_pulp(other.rhs)
 
-            log.debug("Lconstraint= %r" % lconstraint)
+            log.debug("Lconstraint= %r", lconstraint)
             log.debug("Rconstraint=%r", rconstraint)  # 'of type', type(rconstraint) )
             # do the same with rhs
             # print("constraint1=", lconstraint)
@@ -138,9 +139,8 @@ class MpTcpProblem(pu.LpProblem):
         else:
             constraint = other
 
-            #, other.rhs
-
         return super().__iadd__(constraint)
+
 
     def map_symbolic_to_lp_variables(self, *variables):
         """
@@ -149,7 +149,6 @@ class MpTcpProblem(pu.LpProblem):
 
         Args:
             variables: symbolic variables to convert
-
 
         .. seealso::
 
@@ -179,7 +178,7 @@ class MpTcpProblem(pu.LpProblem):
         # if not isinstance(expr, sp.Symbol):
         print("Type %s" % type(expr))
         if not self.is_sympy(expr):
-            log.warning("%s not a symbol but a %s" % (expr, type(expr)))
+            log.warning("%s not a symbol but a %s", expr, type(expr))
             return expr
 
         f = sp.lambdify(expr.free_symbols, expr)
@@ -204,17 +203,19 @@ class MpTcpProblem(pu.LpProblem):
         TODO add throughput, per subflow throughput etc...
         """
         # to be called with solve
-        # todo add parameters of lp_variables_dict ?
+        log.debug("Generate results")
         duration = sim.time_limit
 
         # kind of problem self.subflows[p.subflow_id].rx_bytes += p.size
         # print("RCV_NEXT=", sim.receiver.rcv_next) print("RCV_NEXT=",
         # self.sp_to_pulp(sim.receiver.rcv_next))
         transmitted_bytes = pu.value(self.sp_to_pulp(sim.receiver.rcv_next))
+
+        # TODO convert to a dataclass
         result = {
             "status": pu.LpStatus[self.status],
             # "rcv_buffer":
-            "throughput": transmitted_bytes / duration,
+            "throughput": transmitted_bytes / duration.total_seconds(),
             # a list ofs PerSubflowResult "subflows": {},
             "rcv_next": transmitted_bytes,
             "objective": pu.value(self.objective)
@@ -269,7 +270,6 @@ class ProblemOptimizeCwnd(MpTcpProblem):
     """
 
     def __init__(self, buffer_size, name):
-        # print("=====================", type(super()))
         super().__init__(buffer_size, name, pu.LpMaximize)
 
     # def generate_lp_variables(self, *args, **kwargs):
@@ -285,11 +285,12 @@ class ProblemOptimizeBuffer(MpTcpProblem):
     """
 
     def __init__(self, name):
-        lp_rcv_wnd = pu.LpVariable(SymbolNames.ReceiverWindow.value, lowBound=0, cat=pu.LpInteger)
+        lp_rcv_wnd = pu.LpVariable(
+            SymbolNames.ReceiverWindow.value,
+            lowBound=0, cat=pu.LpInteger)
         lp_rcv_wnd = pu.LpAffineExpression(lp_rcv_wnd)
 
         # self.add_mapping(SymbolNames.ReceiverWindow.value, lp_rcv_wnd)
-        # print("=====================", type(super()))
         super().__init__(lp_rcv_wnd, name, pu.LpMinimize)
         self.setObjective(lp_rcv_wnd)
 
