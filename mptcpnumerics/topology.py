@@ -246,8 +246,8 @@ class MpTcpTopology:
         """
 
         log.info("Loading topology from %s", filename)
-        with open(filename) as filename:
-            self.config = json.load(filename)
+        with open(filename) as fd:
+            self.config = json.load(fd)
 
     @property
     def rcv_buf(self):
