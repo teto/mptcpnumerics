@@ -293,11 +293,11 @@ class MpTcpNumerics(Cmd):
             pb += constraint
 
         # here we can pass a solver !
-        print("HALLO")
+        # print("HALLO")
         pb.solve(solver=self.my_solver)  #  returns status
         pb.writeLP("buffer.lp")
         result = pb.generate_result(sim, export_per_subflow_variables=True)
-        result.update({"duration": duration})
+        # result.duration = duration
 
         print("Status:", pu.LpStatus[pb.status])
         return result
@@ -362,11 +362,14 @@ class MpTcpNumerics(Cmd):
         help=("Force a simulation duration")
     )
     sub_cwnd.add_argument('--output', '-o', action="store",
-        # dest="output",
         default="problem.lp",
         help=("filename where to export the problem"
             ""
             "")
+    )
+    sub_cwnd.add_argument('--json', '-j', action="store",
+        default=None,
+        help=("export to json")
     )
     @with_argparser(sub_cwnd)
     def do_optcwnd(self, args):
@@ -475,18 +478,15 @@ class MpTcpNumerics(Cmd):
         # TODO here we should add some precisions, like MpTcpSubflow
         # duration of the cycle !
         print(result)
-        # # pb.constraints
-        # result = {
-        #         "status": pu.LpStatus[pb.status],
-        #         # "rcv_buffer": pb.variables()[SymbolNames.ReceiverWindow.value],
-        #         # "throughput": pu.value(mptcp_throughput),
-        #         # a list ofs PerSubflowResult
-        #         # "subflows": {},
-        #         # "objective": pu.value(pb.objective)
-        # }
 
         # The status of the solution is printed to the screen
         print("Status:", pu.LpStatus[pb.status])
+
+        if args.json is not None:
+            content = result.to_json()
+
+            with open(args.json, "w+") as fp:
+                fp.write(content)
 
         return result
 

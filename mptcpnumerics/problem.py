@@ -1,11 +1,15 @@
 import pulp as pu
 import sympy as sp
 import logging
+from typing import Dict, Any, Sequence
 import csv
 from collections import namedtuple
-from mptcpnumerics import SymbolNames, generate_rx_name
+from mptcpnumerics import (SymbolNames, generate_rx_name, TRACE,
+    generate_cwnd_name, generate_mss_name, rto)
 from mptcpnumerics.analysis import Constraint
+from dataclasses import dataclass, asdict
 
+import json
 import inspect
 from dataclasses import dataclass
 
@@ -17,6 +21,25 @@ class PerSubflowResult:
     cwnd: int
     throughput: int
     ratio: int
+
+# def to_json(self):
+#     json.dumps(asdict(self))
+@dataclass
+class OptimizationResult:
+    status: pu.LpStatus
+    duration: int
+    # "rcv_buffer":
+    throughput: int
+    # a list ofs PerSubflowResult "subflows": {},
+    rcv_next: int
+    objective: pu.value
+    # subflows/contrib
+    misc: Dict[str, Any]
+    subflow_vars: Sequence[Any]
+
+    def to_json(self):
+        return json.dumps(asdict(self), default=str)
+
 
 class MpTcpProblem(pu.LpProblem):
     """
@@ -58,7 +81,7 @@ class MpTcpProblem(pu.LpProblem):
             log.debug("Converting objective")
             obj = self.sp_to_pulp(obj)
 
-        print("obj=", type(obj))
+        # print("obj=", type(obj))
         # the objective function of type LpConstraintVar
         super().setObjective(obj)
 
@@ -176,7 +199,7 @@ class MpTcpProblem(pu.LpProblem):
         """
 
         # if not isinstance(expr, sp.Symbol):
-        print("Type %s" % type(expr))
+        log.log(TRACE, "Type %s" % type(expr))
         if not self.is_sympy(expr):
             log.warning("%s not a symbol but a %s", expr, type(expr))
             return expr
@@ -191,7 +214,9 @@ class MpTcpProblem(pu.LpProblem):
         return f(*values)
 
 
-    def generate_result(self, sim, export_per_subflow_variables: bool = True):
+    def generate_result(
+        self, sim, export_per_subflow_variables: bool = True
+    ) -> OptimizationResult:
         """
         Should be called only once the problem got solved
         Returns a dict that can be enriched
@@ -211,56 +236,45 @@ class MpTcpProblem(pu.LpProblem):
         # self.sp_to_pulp(sim.receiver.rcv_next))
         transmitted_bytes = pu.value(self.sp_to_pulp(sim.receiver.rcv_next))
 
-        # TODO convert to a dataclass
-        result = {
-            "status": pu.LpStatus[self.status],
-            # "rcv_buffer":
-            "throughput": transmitted_bytes / duration.total_seconds(),
-            # a list ofs PerSubflowResult "subflows": {},
-            "rcv_next": transmitted_bytes,
-            "objective": pu.value(self.objective)
-        }
-
-        # for key, var in self.variablesDict():
-        for key, var in self.lp_variables_dict.items():
-            # print("key/var", key, var)
-            result.update({key: pu.value(var)})
-
+        pulp_vars = {key: pu.value(var) for key, var in self.lp_variables_dict.items()}
 
         # TODO add per subflow throughput totototo echo "hello"
+        subflow_vars = []
         if export_per_subflow_variables:
             for name, sf in sim.sender.subflows.items():
-                print("key/var", key, var)
+                # print("name", name)
 
                 # TODO should dep
-                print("RX=", self.sp_to_pulp(sf.rx))
-                result.update({generate_rx_name(name): pu.value(self.sp_to_pulp(sf.rx))})
+                # print("RX=", self.sp_to_pulp(sf.rx))
+                # generate_rx_name
+                contrib = pu.value(self.sp_to_pulp(sf.rx)) / transmitted_bytes
+
+                # TODO add mss/cwnd
+                this_subflow_vars = ({
+                    "name": name,
+                    "rx": pu.value(self.sp_to_pulp(sf.rx)),
+                    "contrib": contrib,
+                    "cwnd": pulp_vars.get(generate_cwnd_name(name))
+                })
                 # result.update({ "tx": self.sp_to_pulp(sf.sp_tx)})
 
-                contrib = pu.value(self.sp_to_pulp(sf.rx)) / transmitted_bytes
-                result.update({"contrib_" + sf.name: contrib})
+                subflow_vars.append(this_subflow_vars)
                 # TODO generate a contribution for each subflow ?
 
-        result.update({"duration": duration})
-        # result.update({"duration": sim.time_limit })
-        # result.update(self.variablesDict())
-        # result.update(self.variablesDict())
-        # print("result", result)
-        # print("variable_dict", self.variablesDict())
-        return result
+        # TODO add pulp_vars /misc
+        result = OptimizationResult(
+            duration=sim.time_limit,
+            status=pu.LpStatus[self.status],
+            # "rcv_buffer":
+            throughput=transmitted_bytes / duration.total_seconds(),
+            # a list ofs PerSubflowResult "subflows": {},
+            rcv_next=transmitted_bytes,
+            objective=pu.value(self.objective),
+            misc={},
+            subflow_vars=subflow_vars,
+        )
 
-    # @staticmethod
-    # append_to_csv ?
-    def export_to_csv(self, filename, results):
-        """
-        Attempts to export results of the problem
-        results must be iterable
-        TODO should be able to tell rows
-        """
-        with open(filename, 'w', newline='') as f:
-            writer = csv.writer(f)
-            csv.DictWriter(csvfile, fieldnames=fieldnames)
-            writer.writerows(results)
+        return result
 
 
 class ProblemOptimizeCwnd(MpTcpProblem):

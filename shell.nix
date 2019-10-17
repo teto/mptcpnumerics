@@ -22,8 +22,10 @@ let
       # openssl
       # we need a solver: cbc/gurobi/cplex
       cbc
+      jq  # for the tests
     ];
 
+    # Not necessarily needed ?
     src = ./.;
 
     # postShellHook = ''
