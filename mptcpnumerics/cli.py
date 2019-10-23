@@ -71,7 +71,7 @@ class MpTcpNumerics(Cmd):
         # if topology:
         # self.prompt = topology + ">"
         self.debug = True
-        self.do_load_from_file(topology)
+        self.do_load_topology(topology)
 
         # the distributed cbc binary is not necessarily compatible
         # HARDCODED, make it configurable ?
@@ -86,7 +86,7 @@ class MpTcpNumerics(Cmd):
     def subflows(self):
         return self._subflows
 
-    def do_load_from_file(self, fd):
+    def do_load_topology(self, fd):
         """
         Load from file
         """
@@ -756,17 +756,14 @@ def run():
     print("Log level set to %s " % logging.getLevelName(level))
 
     analyzer = MpTcpNumerics(
-        args.input_file,
-        allow_cli_args=False,  # disable autoload of transcripts
+        allow_cli_args=True,  # disable autoload of transcripts
         allow_redirection=True,  # allow pipes in commands
     )
 
-    if unknown_args:
-        log.info("One-shot command: %s" % unknown_args)
-        analyzer.onecmd(' '.join(unknown_args))
-    else:
-        log.info("Interactive mode")
-        analyzer.cmdloop()
+    analyzer.onecmd(f"load_topology {args.input_file}")
+
+    log.info("Interactive mode")
+    analyzer.cmdloop()
 
 
 if __name__ == '__main__':
